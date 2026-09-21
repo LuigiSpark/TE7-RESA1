@@ -116,7 +116,7 @@ void accept_init_fds(struct pollfd* fds, int sfd){
 	for(int i = 0; i < SOMAXCONN+1; i++){
 		if(fds[i].fd == -1){
 			fds[i].fd = client_fd;
-			fds[i].events = POLL_IN;
+			fds[i].events = POLLIN;
 			fds[i].revents = 0;
 			break;
 		}
@@ -142,7 +142,7 @@ int main(int argc, char* argv[]) {
 
 	struct pollfd fds[SOMAXCONN+1] = {0};
 	fds[0].fd = connect_fd;
-	fds[0].events = POLL_IN;
+	fds[0].events = POLLIN;
 	fds[0].revents = 0;
 
 	// Initialise the fd to -1
@@ -155,7 +155,7 @@ int main(int argc, char* argv[]) {
 		die(ret, "Error while polling");
 
 		for(int i = 0; i < SOMAXCONN + 1; i++){
-			if(fds[i].revents & POLL_IN){
+			if(fds[i].revents & POLLIN){
 				if(0 == i){ //if it's a new connection. 
 					accept_init_fds(fds, connect_fd);
 				}else{ // client sending message. 

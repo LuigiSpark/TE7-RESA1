@@ -6,25 +6,35 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <poll.h>
 
 #include "common.h"
 
-void echo_server(int sockfd) {
-	char buff[MSG_LEN];
-	while (1) {
-		// Cleaning memory
-		memset(buff, 0, MSG_LEN);
-		// Receiving message
-		if (recv(sockfd, buff, MSG_LEN, 0) <= 0) {
-			break;
-		}
-		printf("Received: %s", buff);
-		// Sending message (ECHO)
-		if (send(sockfd, buff, strlen(buff), 0) <= 0) {
-			break;
-		}
-		printf("Message sent!\n");
+void die(int ret, char* msg){
+	if(ret < 0){
+		perror(msg);
+		exit(EXIT_FAILURE);
 	}
+}
+
+int echo_server(int sockfd) {
+	char buff[MSG_LEN];
+	// Cleaning memory
+	memset(buff, 0, MSG_LEN);
+	// Receiving message
+
+	int ret = read(sockfd, buff, MSG_LEN);
+	die(ret, "Error while reading");
+	if(ret == 0) return 1;
+
+	printf("Received: %s", buff);
+	// Sending message (ECHO)
+	ret = write(sockfd, buff, strlen(buff));
+	die(ret, "Error while writing");
+	if(ret == 0) return 1;
+	printf("Message sent!\n");
+
+	return EXIT_SUCCESS;
 }
 
 int handle_bind(char *PORT_NUMBER) {
@@ -66,10 +76,24 @@ int handle_bind(char *PORT_NUMBER) {
 	return sfd;
 }
 
-int main(int argc, char* argv[]) {
+void accept_init_fds(struct pollfd* fds, int sfd){
 	struct sockaddr cli;
-	int sfd, connfd;
-	socklen_t len;
+	socklen_t len = sizeof(cli);
+
+	int client_fd = accept(sfd, (struct sockaddr*) &cli, &len);
+	die(client_fd, "Error while accepting");
+
+	for(int i = 0; i < SOMAXCONN+1; i++){
+		if(fds[i].fd == -1){
+			fds[i].fd = client_fd;
+			fds[i].events = POLL_IN;
+			fds[i].revents = 0;
+			break;
+		}
+	}
+}
+
+int main(int argc, char* argv[]) {
 
 	// On vérfie les paramètres en entrée.
 	if(argc != 2){
@@ -78,18 +102,43 @@ int main(int argc, char* argv[]) {
 	}
 	char *PORT_NUMBER = argv[1];
 	
-	sfd = handle_bind(PORT_NUMBER);
-	if ((listen(sfd, SOMAXCONN)) != 0) {
-		perror("listen()\n");
-		exit(EXIT_FAILURE);
+	int connect_fd = handle_bind(PORT_NUMBER);
+
+	int ret = listen(connect_fd, SOMAXCONN);
+	die(ret, "Error while listenning");
+
+	struct pollfd fds[SOMAXCONN+1] = {0};
+	fds[0].fd = connect_fd;
+	fds[0].events = POLL_IN;
+	fds[0].revents = 0;
+
+	// Initialise the fd to -1
+	for(int i = 1; i < SOMAXCONN+1; i++){
+		fds[i].fd = -1; 
 	}
-	len = sizeof(cli);
-	if ((connfd = accept(sfd, (struct sockaddr*) &cli, &len)) < 0) {
-		perror("accept()\n");
-		exit(EXIT_FAILURE);
+
+	while(1){
+		int ret = poll(fds, SOMAXCONN + 1, -1);
+		die(ret, "Error while polling");
+
+		for(int i = 0; i < SOMAXCONN + 1; i++){
+			if(fds[i].revents & POLL_IN){
+				if(0 == i){ //if it's a new connection. 
+					accept_init_fds(fds, connect_fd);
+				}else{ // client sending message. 
+					int ret = echo_server(fds[i].fd);
+					if(1 == ret){
+						close(fds[i].fd);
+						fds[i].fd = -1;
+					}
+					fds[i].revents = 0;
+				}
+			}
+		}
 	}
-	echo_server(connfd);
-	close(sfd);
+
+
+	
 	return EXIT_SUCCESS;
 }
 

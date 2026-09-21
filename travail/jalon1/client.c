@@ -9,46 +9,43 @@
 
 #include "common.h"
 
-struct message{
-	char data[MSG_LEN];
-    int size; // SIZE
-};
+
 
 void echo_client(int sockfd) {
-	struct message clientmsg;
-	struct message servermsg;
-	
+	char data[MSG_LEN];
+	int size;
+
 	while (1) {
 		// Cleaning memory
-		memset(clientmsg.data, 0, MSG_LEN);
+		memset(data, 0, MSG_LEN);
 		// Getting message from client
 		printf("Message: ");
-		clientmsg.size = 0;
-		while ((clientmsg.data[clientmsg.size++] = getchar()) != '\n') {} // trailing '\n' will be sent
-		printf("%d\n",clientmsg.size);
+		size = 0;
+		while ((data[size++] = getchar()) != '\n') {} // trailing '\n' will be sent
+
 
 		//send client msg size
-		if (send(sockfd, &clientmsg.size, sizeof(int), 0) <= 0) {
+		if (send(sockfd, &size, sizeof(int), 0) <= 0) {
 			break;
 		}
 
 		// client Sending message (ECHO)
-		if (send(sockfd, clientmsg.data, strlen(clientmsg.data), 0) <= 0) {
+		if (send(sockfd, data, strlen(data), 0) <= 0) {
 			break;
 		}
 		printf("Message sent!\n");
 		// Cleaning memory
-		memset(servermsg.data, 0, MSG_LEN);
+		memset(data, 0, MSG_LEN);
 		// Receiving message size
-		servermsg.size = 0;
-		if (recv(sockfd, &servermsg.size, sizeof(int), 0) <= 0) {
+		size = 0;
+		if (recv(sockfd, &size, sizeof(int), 0) <= 0) {
 			break;
 		}
 		// Receiving message
-		if (recv(sockfd, servermsg.data, MSG_LEN, 0) <= 0) {
+		if (recv(sockfd, data, MSG_LEN, 0) <= 0) {
 			break;
 		}
-		printf("Received: %s", servermsg.data);
+		printf("Received: %s", data);
 	}
 }
 

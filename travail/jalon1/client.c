@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <poll.h>
 
 #include "common.h"
 
@@ -48,33 +49,68 @@ void echo_client(int sockfd) {
 	char message[MSG_LEN];
 	size_t size;
 
+	struct pollfd fds[2];
+	//initiation descripteur stdin
+	fds[0].fd=STDIN_FILENO;
+	fds[0].events=POLLIN;
+	fds[0].revents=0;
+	
+	//initiation descripteur socket connectée
+	fds[1].fd=sockfd;
+	fds[1].events=POLLIN;
+	fds[1].revents=0;
+	
 	while (1) {
-		// Cleaning memory
-		memset(message, 0, MSG_LEN);
-		// Getting message from client
-		printf("Message: ");
-		size = 0;
-		while ((message[size++] = getchar()) != '\n') {
-			if(size > MSG_LEN - 1){
-				printf("Le message depasse la limite");
-				break;
+		
+		int nb_active_fd = poll(fds, 2, -1);
+		die(nb_active_fd, "On polling...");
+		if(fds[0].revents & POLLIN){
+			// 1. Lire l'entrée clavier (boucle getchar() jusqu'à '\n')
+			// 2. Envoyer la taille (int) au serveur avec send()
+			// 3. Envoyer la chaîne au serveur avec send()
+
+
+			// Cleaning memory
+			memset(message, 0, MSG_LEN);
+			// Getting message from client
+			printf("Message: ");
+			size = 0;
+			while ((message[size++] = getchar()) != '\n') {
+				if(size > MSG_LEN - 2){
+					printf("Le message depasse la limite");
+					break;
+				}
 			}
+
+
+			secure_write(sockfd, &size, sizeof(size));
+			secure_write(sockfd, message, size);
+
+			if(strncmp(message, "/quit", 5) == 0){
+				printf("déconnecté\n");
+				close(sockfd);
+				free(message);
+				exit(EXIT_SUCCESS);
+			}			
+
+			printf("Message sent!\n");
 		}
 
-		secure_write(sockfd, &size, sizeof(size));
-		secure_write(sockfd, message, size);
+		else if (fds[1].revents & POLLIN){
+			// 1. Lire la taille (int) envoyée par le serveur
+			// 3. Lire la chaîne de caractères de cette taille exacte
+			// 4. Afficher le message reçu
 
-		printf("Message sent!\n");
+			secure_read(sockfd, &size, sizeof(size));
 
-		secure_read(sockfd, &size, sizeof(size));
+			// Read message.
+			char* message = (char*)malloc(sizeof(char)*size);
 
-		// Read message.
-		char* message = (char*)malloc(sizeof(char)*size);
+			secure_read(sockfd, message, size);
 
-		secure_read(sockfd, message, size);
-
-		printf("Received: %s", message);
-		free(message);
+			printf("Received: %s", message);
+			free(message);
+		}
 	}
 }
 

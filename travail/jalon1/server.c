@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <poll.h>
+#include <string.h>
 
 #include "common.h"
 
@@ -47,13 +48,17 @@ int echo_server(int sockfd) {
 	// Read size
 	size_t size;
 	int ret = secure_read(sockfd, &size, sizeof(size));
-	if(ret == 0) return 1;
+	if(ret == 0) return 1; //Code for closing, 0 is used by EXIT_SUCCESS.
 
 	// Read message.
 	char* message = (char*)malloc(sizeof(char)*size);
 
 	ret = secure_read(sockfd, message, size);
 	if(ret == 0) return 1;
+
+	if(strncmp(message, "/quit", 5) == 0){
+		return 1;
+	}
 
 	printf("Received: %s", message);
 
@@ -161,6 +166,7 @@ int main(int argc, char* argv[]) {
 				}else{ // client sending message. 
 					int ret = echo_server(fds[i].fd);
 					if(1 == ret){
+						printf("disconnected");
 						close(fds[i].fd);
 						fds[i].fd = -1;
 					}

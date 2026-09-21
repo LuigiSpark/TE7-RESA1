@@ -50,6 +50,7 @@ void echo_client(int sockfd) {
 	size_t size;
 
 	struct pollfd fds[2];
+
 	//initiation descripteur stdin
 	fds[0].fd=STDIN_FILENO;
 	fds[0].events=POLLIN;
@@ -59,6 +60,7 @@ void echo_client(int sockfd) {
 	fds[1].fd=sockfd;
 	fds[1].events=POLLIN;
 	fds[1].revents=0;
+
 	printf("Message: ");
 	fflush(stdout);
 	
@@ -69,33 +71,27 @@ void echo_client(int sockfd) {
 
 
 		if(fds[0].revents & POLLIN){
-			// 1. Lire l'entrée clavier (boucle getchar() jusqu'à '\n')
-			// 2. Envoyer la taille (int) au serveur avec send()
-			// 3. Envoyer la chaîne au serveur avec send()
-
-
 			// Cleaning memory
 			memset(message, 0, MSG_LEN);
 			// Getting message from client
 			size = 0;
 			while ((message[size++] = getchar()) != '\n') {
 				if(size > MSG_LEN - 2){
-					printf("Le message depasse la limite");
+					printf("Le message dépasse la limite.");
 					break;
 				}
 			}
+			message[size-1] = '\0'; // replace \n by '\0'
 
 			secure_write(sockfd, &size, sizeof(size));
 			secure_write(sockfd, message, size);
 
 			if(strncmp(message, "/quit", 5) == 0){
-				printf("déconnecté\n");
+				printf("Disconnected.\n");
 				close(sockfd);
 				exit(EXIT_SUCCESS);
 			}			
 			printf("Message sent!\n");
-			printf("Message: ");
-			fflush(stdout);
 		}
 
 		else if (fds[1].revents & POLLIN){
@@ -103,6 +99,7 @@ void echo_client(int sockfd) {
 			// 3. Lire la chaîne de caractères de cette taille exacte
 			// 4. Afficher le message reçu
 
+			//Read size
 			int ret=secure_read(sockfd, &size, sizeof(size));
 			if(ret==0){
 				printf("serveur deconnecté\n");
@@ -110,14 +107,17 @@ void echo_client(int sockfd) {
 				exit(EXIT_SUCCESS);
 			}
 
-
-			// Read message.
-			char* message = (char*)malloc(sizeof(char)*size+1);
+			// Read message
+			// .
+			char* message = (char*)malloc(sizeof(char)*size);
 
 			secure_read(sockfd, message, size);
 
 			message[size] = '\0';
-			printf("Received: %s", message);
+			printf("Received: %s\n", message);
+			
+			printf("Message: ");
+			fflush(stdout);
 			
 			free(message);
 		}

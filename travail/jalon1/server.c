@@ -11,6 +11,53 @@
 
 #include "common.h"
 
+struct client_data{
+	int fd;
+	char IPv4[INET_ADDRSTRLEN];
+	int port; 
+};
+
+typedef struct maillon{
+	struct client_data d;
+	struct maillon* next; 
+}*chain;
+
+void add(chain* l, struct client_data d){
+	chain new_node = (struct maillon* )malloc(sizeof(struct maillon));
+	new_node->d = d;
+    new_node->next = *l;
+    *l = new_node;
+}
+
+//Return -1 if element is not found.
+int delete(chain*l, int fd){
+	chain current = *l;
+	chain previous = NULL;
+	if(*l == NULL){
+		printf("Error while deleting: empty chain.");
+		return EXIT_FAILURE;
+	}
+	while (current != NULL && current->d.fd != fd) {
+        previous = current;
+        current = current->next;
+    }
+
+	if (current == NULL) {
+        return -1;
+    }
+
+   	if (previous == NULL) { // Fd is the first element of the list.
+    	*l = current->next;
+	} else {
+		previous->next = current->next;
+	}
+
+
+    free(current);
+    return EXIT_SUCCESS;
+}
+
+
 void die(int ret, char* msg){
 	if(ret < 0){
 		perror(msg);
@@ -51,10 +98,9 @@ int echo_server(int sockfd) {
 	if(ret == 0) return 1; //Code for closing, 0 is used by EXIT_SUCCESS.
 
 	// Read message.
-	char* message = (char*)malloc(sizeof(char)*size+1);
+	char* message = (char*)malloc(sizeof(char)*size);
 
 	ret = secure_read(sockfd, message, size);
-	message[size] = '\0';
 	if(ret == 0) {
 		free(message);
 		return 1;
@@ -65,7 +111,7 @@ int echo_server(int sockfd) {
 		return 1;
 	}
 
-	printf("Received: %s", message);
+	printf("Received: %s\n", message);
 
 	// Sending message (ECHO)
 	secure_write(sockfd, &size, sizeof(size));
@@ -120,12 +166,24 @@ int handle_bind(char *PORT_NUMBER) {
 	return sfd;
 }
 
-void accept_init_fds(struct pollfd* fds, int sfd){
-	struct sockaddr cli;
+void accept_init_fds(struct pollfd* fds, int sfd, chain* data_client){
+	struct sockaddr_in cli;
 	socklen_t len = sizeof(cli);
 
 	int client_fd = accept(sfd, (struct sockaddr*) &cli, &len);
 	die(client_fd, "Error while accepting");
+
+	char ip_client[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET, &(cli.sin_addr), ip_client, INET_ADDRSTRLEN);
+
+	int port_client = ntohs(cli.sin_port);
+
+	struct client_data d;
+	d.fd = client_fd;
+	strcpy(d.IPv4, ip_client);
+	d.port = port_client;
+
+	add(data_client, d);
 
 	for(int i = 0; i < SOMAXCONN+1; i++){
 		if(fds[i].fd == -1){
@@ -148,8 +206,13 @@ int main(int argc, char* argv[]) {
 	
 	int connect_fd = handle_bind(PORT_NUMBER);
 
+	int yes = 1;
+    setsockopt(connect_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+
 	int ret = listen(connect_fd, SOMAXCONN);
 	die(ret, "Error while listenning");
+
+	chain data_client = NULL;
 
 	struct pollfd fds[SOMAXCONN+1] = {0};
 	fds[0].fd = connect_fd;
@@ -168,12 +231,13 @@ int main(int argc, char* argv[]) {
 		for(int i = 0; i < SOMAXCONN + 1; i++){
 			if(fds[i].revents & POLLIN){
 				if(0 == i){ //if it's a new connection. 
-					accept_init_fds(fds, connect_fd);
+					accept_init_fds(fds, connect_fd, &data_client);
 				}else{ // client sending message. 
 					int ret = echo_server(fds[i].fd);
 					if(1 == ret){
 						printf("disconnected");
 						close(fds[i].fd);
+						delete(&data_client, fds[i].fd);
 						fds[i].fd = -1;
 					}
 					fds[i].revents = 0;

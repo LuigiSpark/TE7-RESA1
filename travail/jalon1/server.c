@@ -17,23 +17,53 @@ void die(int ret, char* msg){
 	}
 }
 
+int secure_read(int socket, void* buffer, size_t size_buffer){
+    int ret;
+    size_t received = 0;
+    while(received < size_buffer){
+        ret = read(socket, (char*)buffer + received, size_buffer - received);
+        die(ret, "Error while reading");
+        if(ret == 0){
+            break;
+        }
+        received += ret;
+    }
+    return received;
+}
+
+int secure_write(int socket, void*buffer, size_t size_msg){
+    int ret;
+    size_t sent = 0;
+    do{
+        ret = write(socket, (char*)buffer + sent, size_msg - sent);
+        sent += ret;
+        die(ret, "Error while wrinting");
+    }while(sent != size_msg);
+    return ret;
+}
+
+
 int echo_server(int sockfd) {
-	char buff[MSG_LEN];
-	// Cleaning memory
-	memset(buff, 0, MSG_LEN);
-	// Receiving message
-
-	int ret = read(sockfd, buff, MSG_LEN);
-	die(ret, "Error while reading");
+	// Read size
+	size_t size;
+	int ret = secure_read(sockfd, &size, sizeof(size));
 	if(ret == 0) return 1;
 
-	printf("Received: %s", buff);
+	// Read message.
+	char* message = (char*)malloc(sizeof(char)*size);
+
+	ret = secure_read(sockfd, message, size);
+	if(ret == 0) return 1;
+
+	printf("Received: %s", message);
+
 	// Sending message (ECHO)
-	ret = write(sockfd, buff, strlen(buff));
-	die(ret, "Error while writing");
-	if(ret == 0) return 1;
-	printf("Message sent!\n");
+	secure_write(sockfd, &size, sizeof(size));
+	secure_write(sockfd, message, size);
 
+	printf("Message sent!\n");
+	
+	free(message);
 	return EXIT_SUCCESS;
 }
 
@@ -103,6 +133,9 @@ int main(int argc, char* argv[]) {
 	char *PORT_NUMBER = argv[1];
 	
 	int connect_fd = handle_bind(PORT_NUMBER);
+
+	int yes = 1;
+    setsockopt(connect_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
 
 	int ret = listen(connect_fd, SOMAXCONN);
 	die(ret, "Error while listenning");

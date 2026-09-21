@@ -9,48 +9,72 @@
 
 #include "common.h"
 
+void die(int ret, char* msg){
+	if(ret < 0){
+		perror(msg);
+		exit(EXIT_FAILURE);
+	}
+}
+
+int secure_read(int socket, void* buffer, size_t size_buffer){
+    int ret;
+    size_t received = 0;
+    while(received < size_buffer){
+        ret = read(socket, (char*)buffer + received, size_buffer - received);
+        die(ret, "Error while reading");
+
+        if(ret == 0){
+            break;
+        }
+        received += ret;
+    }
+    return received;
+}
+
+int secure_write(int socket, void*buffer, size_t size_msg){
+    int ret;
+    size_t sent = 0;
+    do{
+        ret = write(socket, (char*)buffer + sent, size_msg - sent);
+        sent += ret;
+        die(ret, "Error while wrinting");
+    }while(sent != size_msg);
+    return ret;
+}
+
 
 
 void echo_client(int sockfd) {
-	char data[MSG_LEN];
+	char message[MSG_LEN];
 	size_t size;
 
 	while (1) {
 		// Cleaning memory
-		memset(data, 0, MSG_LEN);
+		memset(message, 0, MSG_LEN);
 		// Getting message from client
 		printf("Message: ");
 		size = 0;
-		while ((data[size++] = getchar()) != '\n') {
-			if(size==MSG_LEN-1){
+		while ((message[size++] = getchar()) != '\n') {
+			if(size > MSG_LEN - 1){
 				printf("Le message depasse la limite");
-				exit(EXIT_FAILURE);
+				break;
 			}
-		} // trailing '\n' will be sent
-
-
-		//send client msg size
-		if (send(sockfd, &size, sizeof(size),0) <= 0) {
-			break;
 		}
 
-		// client Sending message (ECHO)
-		if (send(sockfd, data, size,0) <= 0) {
-			break;
-		}
+		secure_write(sockfd, &size, sizeof(size));
+		secure_write(sockfd, message, size);
+
 		printf("Message sent!\n");
-		// Cleaning memory
-		memset(data, 0, MSG_LEN);
-		// Receiving message size
-		size = 0;
-		if (recv(sockfd, &size, sizeof(size),0) <= 0) {
-			break;
-		}
-		// Receiving message
-		if (recv(sockfd, data, size,0) <= 0) {
-			break;
-		}
-		printf("Received: %s", data);
+
+		secure_read(sockfd, &size, sizeof(size));
+
+		// Read message.
+		char* message = (char*)malloc(sizeof(char)*size);
+
+		secure_read(sockfd, message, size);
+
+		printf("Received: %s", message);
+		free(message);
 	}
 }
 

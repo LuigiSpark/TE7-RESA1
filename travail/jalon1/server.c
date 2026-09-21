@@ -51,12 +51,17 @@ int echo_server(int sockfd) {
 	if(ret == 0) return 1; //Code for closing, 0 is used by EXIT_SUCCESS.
 
 	// Read message.
-	char* message = (char*)malloc(sizeof(char)*size);
+	char* message = (char*)malloc(sizeof(char)*size+1);
 
 	ret = secure_read(sockfd, message, size);
-	if(ret == 0) return 1;
+	message[size] = '\0';
+	if(ret == 0) {
+		free(message);
+		return 1;
+	}
 
 	if(strncmp(message, "/quit", 5) == 0){
+		free(message);
 		return 1;
 	}
 
@@ -95,6 +100,10 @@ int handle_bind(char *PORT_NUMBER) {
 		rp->ai_protocol);
 		if (sfd == -1) {
 			continue;
+		}
+		else{
+			int yes = 1;
+    		setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
 		}
 		if (bind(sfd, rp->ai_addr, rp->ai_addrlen) == 0) {
 			break;
@@ -138,9 +147,6 @@ int main(int argc, char* argv[]) {
 	char *PORT_NUMBER = argv[1];
 	
 	int connect_fd = handle_bind(PORT_NUMBER);
-
-	int yes = 1;
-    setsockopt(connect_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
 
 	int ret = listen(connect_fd, SOMAXCONN);
 	die(ret, "Error while listenning");

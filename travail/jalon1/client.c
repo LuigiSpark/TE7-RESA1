@@ -89,7 +89,6 @@ void echo_client(int sockfd) {
 			if(strncmp(message, "/quit", 5) == 0){
 				printf("déconnecté\n");
 				close(sockfd);
-				free(message);
 				exit(EXIT_SUCCESS);
 			}			
 

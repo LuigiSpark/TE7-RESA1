@@ -13,7 +13,7 @@
 
 void echo_client(int sockfd) {
 	char data[MSG_LEN];
-	int size;
+	size_t size;
 
 	while (1) {
 		// Cleaning memory
@@ -21,16 +21,21 @@ void echo_client(int sockfd) {
 		// Getting message from client
 		printf("Message: ");
 		size = 0;
-		while ((data[size++] = getchar()) != '\n') {} // trailing '\n' will be sent
+		while ((data[size++] = getchar()) != '\n') {
+			if(size==MSG_LEN-1){
+				printf("Le message depasse la limite");
+				exit(EXIT_FAILURE);
+			}
+		} // trailing '\n' will be sent
 
 
 		//send client msg size
-		if (send(sockfd, &size, sizeof(int), 0) <= 0) {
+		if (send(sockfd, &size, sizeof(size),0) <= 0) {
 			break;
 		}
 
 		// client Sending message (ECHO)
-		if (send(sockfd, data, strlen(data), 0) <= 0) {
+		if (send(sockfd, data, size,0) <= 0) {
 			break;
 		}
 		printf("Message sent!\n");
@@ -38,11 +43,11 @@ void echo_client(int sockfd) {
 		memset(data, 0, MSG_LEN);
 		// Receiving message size
 		size = 0;
-		if (recv(sockfd, &size, sizeof(int), 0) <= 0) {
+		if (recv(sockfd, &size, sizeof(size),0) <= 0) {
 			break;
 		}
 		// Receiving message
-		if (recv(sockfd, data, MSG_LEN, 0) <= 0) {
+		if (recv(sockfd, data, size,0) <= 0) {
 			break;
 		}
 		printf("Received: %s", data);
@@ -80,6 +85,7 @@ int handle_connect(char* domain, char *port) {
 int main(int argc, char *argv[]) {
 	if (argc!=3){
 		fprintf(stderr,"Erreur:\n./client <server_name> <server_port>\n");
+		exit(EXIT_FAILURE);
 	}
 	char *domain = argv[1];
 	char *port = argv[2];

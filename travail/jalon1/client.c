@@ -9,6 +9,13 @@
 
 #include "common.h"
 
+struct message{
+    int type; // RQ / RSP
+    int size; // SIZE
+    long int speaker_id;
+};
+
+
 void echo_client(int sockfd) {
 	char buff[MSG_LEN];
 	int n;
@@ -34,13 +41,13 @@ void echo_client(int sockfd) {
 	}
 }
 
-int handle_connect() {
+int handle_connect(char* domain, char *port) {
 	struct addrinfo hints, *result, *rp;
 	int sfd;
 	memset(&hints, 0, sizeof(struct addrinfo));
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
-	if (getaddrinfo(SERV_ADDR, SERV_PORT, &hints, &result) != 0) {
+	if (getaddrinfo(domain, port, &hints, &result) != 0) {
 		perror("getaddrinfo()");
 		exit(EXIT_FAILURE);
 	}
@@ -62,9 +69,14 @@ int handle_connect() {
 	return sfd;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+	if (argc!=3){
+		fprintf(stderr,"Erreur:\n./client <server_name> <server_port>\n");
+	}
+	char *domain = argv[1];
+	char *port = argv[2];
 	int sfd;
-	sfd = handle_connect();
+	sfd = handle_connect(domain, port);
 	echo_client(sfd);
 	close(sfd);
 	return EXIT_SUCCESS;

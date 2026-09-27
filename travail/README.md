@@ -10,6 +10,12 @@ travail/
 │   ├── server.h         # API du serveur
 │   ├── user_list.h      # Liste des utilisateurs
 │   └── channel_list.h   # Liste des salons, jalon 4 uniquement
+├── src/ 
+    ├── protocol.c       
+│   ├── client.c       
+│   ├── server.c         
+│   ├── user_list.c      
+│   └── channel_list.c
 └── README.md
 ```
 

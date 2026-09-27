@@ -5,7 +5,16 @@
 
 struct user *user_list_find_by_nickname(user_list *users, const char *nickname);
 
-struct user *user_list_find_by_socket(user_list *users, int socket_fd);
+struct user *user_list_find_by_socket(user_list *users, int socket_fd){
+	user_list current = *users;
+	while (current != NULL && current->user.fd != socket_fd) {
+        current = current->next;
+    }
+	if(current != NULL && current->user.fd == socket_fd){
+		return &(current->user);
+	}
+	return NULL;
+}
 
 int user_list_add(user_list *users, struct user user){
     user_list new_node = (struct maillon*)malloc(sizeof(struct maillon));

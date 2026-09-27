@@ -6,9 +6,6 @@
 struct message{
     int pld_len;
 };
-
-void die(int ret, char* msg);
-
 int protocol_send_all(int socket_fd, const void *buffer, size_t length);
 
 int protocol_recv_all(int socket_fd, void *buffer, size_t length);

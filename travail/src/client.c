@@ -17,6 +17,14 @@ struct client{
 	int fd; 
 };
 
+void client_die(int ret, struct client *client,  char* msg){
+	if(ret < 0){
+		perror(msg);
+		client_close(client);
+		exit(EXIT_FAILURE);
+	}
+}
+
 
 int client_connect(struct client *client, const char *host, const char *port){
 	struct addrinfo hints, *result, *rp;
@@ -97,7 +105,7 @@ int client_run(struct client *client){
 	while(1){
 		
 		int nb_active_fd = poll(fds, 2, -1);
-		die(nb_active_fd, "On polling...");
+		client_die(nb_active_fd, client, "On polling...");
 
 		if(fds[0].revents & POLLIN){
 			//Get the message on stdin. 

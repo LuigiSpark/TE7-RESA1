@@ -48,69 +48,37 @@ int client_connect(struct client *client, const char *host, const char *port){
 	return EXIT_SUCCESS;
 }
 
-
-void send_stdin_data(int sockfd) {
-	char payload[MSG_LEN];
-	int size;
-
-	// Cleaning memory
-	memset(payload, 0, MSG_LEN);
-	// Getting message from client
-	size = 0;
-	while ((payload[size++] = getchar()) != '\n') {
-		if(size > MSG_LEN - 2){
-			printf("Le message dépasse la limite.");
-			break;
-		}
-	}
-	payload[size-1] = '\0'; // replace \n by '\0'
-
-	struct message m;
-	m.pld_len = size;
-	protocol_send_message(sockfd, &m, payload);
+int client_send_message(struct client *client, const struct message *message, const void *payload){
+	protocol_send_message(client->fd, message, payload);
 
 	if(strncmp(payload, "/quit", 5) == 0){
 		printf("Disconnected.\n");
-		close(sockfd);
+		client_close(client);
 		exit(EXIT_SUCCESS);
 	}			
 	printf("Message sent!\n");
+	return EXIT_SUCCESS;
 }
 
-void receive_data(int sfd){
-
-
+int client_receive_message(struct client *client){
 	struct message message;
 	char* payload;
-	int ret = protocol_recv_message(sfd, &message, (void**)&payload);
+	int ret = protocol_recv_message(client->fd, &message, (void**)&payload);
 
 	if(ret == 1){
 		printf("Serveur deconnecté.\n");
-		close(sfd);
+		client_close(client);
 		exit(EXIT_SUCCESS);
 	}
-
 	printf("Received: %s\n", payload);
 	printf("Message: ");
 	fflush(stdout);
 	
 	free(payload);
+	return EXIT_SUCCESS;
 }
 
-
-int main(int argc, char *argv[]) {
-	if (argc!=3){
-		fprintf(stderr,"Erreur:\n./client <server_name> <server_port>\n");
-		exit(EXIT_FAILURE);
-	}
-	char *host = argv[1];
-	char *port = argv[2];
-
-	struct client client; 
-	client_connect(&client, host, port);
-	
-
-
+int client_run(struct client *client){
 	struct pollfd fds[2];
 
 	//initiation descripteur stdin
@@ -119,7 +87,7 @@ int main(int argc, char *argv[]) {
 	fds[0].revents=0;
 	
 	//initiation descripteur socket connectée
-	fds[1].fd = client.fd;
+	fds[1].fd = client->fd;
 	fds[1].events=POLLIN;
 	fds[1].revents=0;
 
@@ -132,14 +100,55 @@ int main(int argc, char *argv[]) {
 		die(nb_active_fd, "On polling...");
 
 		if(fds[0].revents & POLLIN){
-			send_stdin_data(client.fd);
+			//Get the message on stdin. 
+			char payload[MSG_LEN];
+			int size;
+
+			// Cleaning memory
+			memset(payload, 0, MSG_LEN);
+			// Getting message from client
+			size = 0;
+			while ((payload[size++] = getchar()) != '\n') {
+				if(size > MSG_LEN - 2){
+					printf("Le message dépasse la limite.");
+					break;
+				}
+			}
+			payload[size-1] = '\0'; // replace \n by '\0'
+
+			struct message message;
+			message.pld_len = size;
+			client_send_message(client, &message, payload);
 		}
 		if(fds[1].revents & POLLIN){
-			receive_data(client.fd);
+			client_receive_message(client);
 		}
 	}
+}
 
-	close(client.fd);
+void client_close(struct client *client){
+	if(client->fd != -1){
+		close(client->fd);
+	}
+	client->fd = -1;
+}
+
+
+
+int main(int argc, char *argv[]) {
+	if (argc!=3){
+		fprintf(stderr,"Erreur:\n./client <server_name> <server_port>\n");
+		exit(EXIT_FAILURE);
+	}
+	char *host = argv[1];
+	char *port = argv[2];
+
+	struct client client; 
+
+	client_connect(&client, host, port);
+	client_run(&client);
+	client_close(&client);
+
 	return EXIT_SUCCESS;
 }
 

@@ -9,7 +9,8 @@ travail/
 │   ├── client.h         # API du client
 │   ├── server.h         # API du serveur
 │   ├── user_list.h      # Liste des utilisateurs
-│   └── channel_list.h   # Liste des salons, jalon 4 uniquement
+│   ├──	channel_list.h   # Liste des salons, jalon 4 uniquement
+│   └── msg_struct.h 	 # Protocole de messages
 ├── src/ 
     ├── protocol.c       
 │   ├── client.c       

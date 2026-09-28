@@ -88,7 +88,7 @@ int client_receive_message(struct client *client){
 bool not_contain_only_digits_or_letters(char string[]){
 	int s_len = strlen(string);
 	for(int i = 0; i < s_len; i++){
-		if(!isdigit(string[i]) || !isalpha(string[i])) {
+		if(!isalnum(string[i])) {
 			return true; 
 		}
 	}
@@ -133,26 +133,73 @@ int client_run(struct client *client){
 			}
 			payload[size-1] = '\0'; // replace \n by '\0'
 
-			struct message message;
-			message.pld_len = size;
+			struct message message_rcv;
+			message_rcv.pld_len = size;
 
+			//Commande /quit
 			if(strcmp(payload, "/quit") == 0){
-				client_send_message(client, &message, payload);
+				client_send_message(client, &message_rcv, payload);
 				printf("Disconnected.\n");
 				client_close(client);
-			}else if(strncmp(payload, "/nick ", 5) == 0){
+				printf("succes de commande\n");
 
-				//char* nickname = (payload + 5);
-				if(strlen(nickname) > 128 || not_contain_only_digits_or_letters(nickname)){
-					printf("Invalid....");
-				}else{
-						//message.nick_sender = payload + 5; 
-					client_send_message(client, &message, payload);
+			//Command /who
+			}else if(strncmp(payload, "/who ", 5) == 0){
+				memset(&message_rcv, 0, sizeof(message_rcv));
+				message_rcv.type = NICKNAME_LIST;
+				client_send_message(client, &message_rcv, NULL);
+
+			//Commande /whois User1
+			}else if(strncmp(payload, "/whois ", 7) == 0){
+				char* cible = (payload + 7);
+				memset(&message_rcv, 0, sizeof(message_rcv));
+				message_rcv.type = NICKNAME_INFOS;
+				strncpy(message_rcv.infos, cible, INFOS_LEN-1);
+				client_send_message(client, &message_rcv, NULL);
+
+			//Commande /msgall Hello
+			}else if(strncmp(payload, "/msg ", 5) == 0){
+				memset(&message_rcv, 0, sizeof(message_rcv));
+				message_rcv.pld_len = size;
+				message_rcv.type = BROADCAST_SEND;
+				client_send_message(client, &message_rcv, payload);
+
+			//Commande /msg user1 Hello
+			}else if(strncmp(payload, "/msg ", 5) == 0){
+				char* destinataire = (payload + 5);
+				memset(&message_rcv, 0, sizeof(message_rcv));
+				message_rcv.pld_len = size;
+				message_rcv.type = UNICAST_SEND;
+				strncpy(message_rcv.infos, destinataire, INFOS_LEN-1);
+				client_send_message(client, &message_rcv, payload);
+
+			//Command /nick
+			}else if(strncmp(payload, "/nick ", 6) == 0){
+
+				char* nickname = (payload + 6);
+				
+				printf("%s\n",nickname);
+				if(strlen(nickname) >= NICK_LEN ){
+					printf("Invalid nickname (too long)\n");
+				}
+				else if(not_contain_only_digits_or_letters(nickname)){
+					printf("Invalid nickname (invalid characters)\n");
+				}
+				else{
+					printf("valide name!\n");
+					struct message message;
+					memset(&message, 0, sizeof(message));
+					message.pld_len = 0;
+
+					message.type = NICKNAME_NEW;
+
+					strncpy(message.infos, nickname, INFOS_LEN-1);	
+					client_send_message(client, &message, NULL);
 				
 				}
-			
+			//ECHO normale
 			}else{
-				client_send_message(client, &message, payload);
+				client_send_message(client, &message_rcv, payload);
 			}
 		}
 		if(fds[1].revents & POLLIN){

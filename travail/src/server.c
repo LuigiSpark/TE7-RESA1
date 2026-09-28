@@ -132,7 +132,7 @@ int server_receive_message(struct server *server, struct user *sender){
 	if(ret == 1) return 1; //Code for closing, 0 is used by EXIT_SUCCESS.
 
 
-	if(strncmp(payload, "/quit", 5) == 0){
+	if(strcmp(payload, "/quit") == 0){
 		free(payload);
 		return 1;
 	}

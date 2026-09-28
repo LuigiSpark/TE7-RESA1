@@ -59,11 +59,6 @@ int client_connect(struct client *client, const char *host, const char *port){
 int client_send_message(struct client *client, const struct message *message, const void *payload){
 	protocol_send_message(client->fd, message, payload);
 
-	if(strncmp(payload, "/quit", 5) == 0){
-		printf("Disconnected.\n");
-		client_close(client);
-		exit(EXIT_SUCCESS);
-	}			
 	printf("Message sent!\n");
 	return EXIT_SUCCESS;
 }
@@ -126,7 +121,14 @@ int client_run(struct client *client){
 
 			struct message message;
 			message.pld_len = size;
-			client_send_message(client, &message, payload);
+
+			if(strcmp(payload, "/quit") == 0){
+				client_send_message(client, &message, payload);
+				printf("Disconnected.\n");
+				client_close(client);
+			}else{
+				client_send_message(client, &message, payload);
+			}
 		}
 		if(fds[1].revents & POLLIN){
 			client_receive_message(client);
@@ -139,6 +141,7 @@ void client_close(struct client *client){
 		close(client->fd);
 	}
 	client->fd = -1;
+	exit(EXIT_SUCCESS);
 }
 
 

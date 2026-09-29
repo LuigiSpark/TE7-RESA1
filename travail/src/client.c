@@ -69,19 +69,24 @@ int client_send_message(struct client *client, const struct message *message, co
 
 int client_receive_message(struct client *client){
 	struct message message;
-	char* payload;
+	char* payload = NULL;
 	int ret = protocol_recv_message(client->fd, &message, (void**)&payload);
 
 	if(ret == 1){
 		printf("Serveur deconnecté.\n");
 		client_close(client);
+		if (payload != NULL) {
+			free(payload); 
+		}
 		exit(EXIT_SUCCESS);
 	}
 	printf("Received: %s\n", payload);
 	printf("Message: ");
 	fflush(stdout);
 	
-	free(payload);
+	if (payload != NULL) {
+		free(payload);
+	}
 	return EXIT_SUCCESS;
 }
 
@@ -138,14 +143,19 @@ int client_run(struct client *client){
 
 			//Commande /quit
 			if(strcmp(payload, "/quit") == 0){
+				memset(&message_rcv, 0, sizeof(message_rcv));
+				message_rcv.pld_len = size;
+				message_rcv.type = ECHO_SEND;
+				
 				client_send_message(client, &message_rcv, payload);
 				printf("Disconnected.\n");
 				client_close(client);
-				printf("succes de commande\n");
+				return EXIT_SUCCESS; // quitter la fct pour retourner au main()
 
 			//Command /who
-			}else if(strncmp(payload, "/who ", 5) == 0){
+			}else if(strcmp(payload, "/who") == 0){
 				memset(&message_rcv, 0, sizeof(message_rcv));
+				message_rcv.pld_len= 0;
 				message_rcv.type = NICKNAME_LIST;
 				client_send_message(client, &message_rcv, NULL);
 
@@ -153,25 +163,43 @@ int client_run(struct client *client){
 			}else if(strncmp(payload, "/whois ", 7) == 0){
 				char* cible = (payload + 7);
 				memset(&message_rcv, 0, sizeof(message_rcv));
+				message_rcv.pld_len= 0;
 				message_rcv.type = NICKNAME_INFOS;
 				strncpy(message_rcv.infos, cible, INFOS_LEN-1);
 				client_send_message(client, &message_rcv, NULL);
 
 			//Commande /msgall Hello
-			}else if(strncmp(payload, "/msg ", 5) == 0){
+			}else if(strncmp(payload, "/msgall ", 8) == 0){
 				memset(&message_rcv, 0, sizeof(message_rcv));
-				message_rcv.pld_len = size;
+				char* msg = payload + 8; //décalage du pointeur: pointe ver le msg directe
+				message_rcv.pld_len = strlen(msg) + 1 ;//inclusion du '\0'
 				message_rcv.type = BROADCAST_SEND;
-				client_send_message(client, &message_rcv, payload);
+				client_send_message(client, &message_rcv, msg);
 
 			//Commande /msg user1 Hello
 			}else if(strncmp(payload, "/msg ", 5) == 0){
-				char* destinataire = (payload + 5);
+				char* destinataire = payload + 5; 
+				char* espace_msg= strchr(destinataire, ' ');//on cherche le 2eme espace, celui qui separt le msg du pseudo
+				if (espace_msg == NULL){
+					fprintf(stderr,"la commande est /msg <pseudo> <message>");
+					printf("Message: "); 
+					fflush(stdout);
+					continue;
+				}
+				char* msg = NULL;
+				if (espace_msg != NULL){
+					*(espace_msg)= '\0'; //on coupe temporairement pour isoler le pseudo
+					msg= espace_msg+1; //le msg commence juste après
+				}else{
+					msg= ""; //msg vide?
+				}
 				memset(&message_rcv, 0, sizeof(message_rcv));
-				message_rcv.pld_len = size;
+				message_rcv.pld_len = strlen(msg) + 1 ;//inclusion du '\0'
 				message_rcv.type = UNICAST_SEND;
 				strncpy(message_rcv.infos, destinataire, INFOS_LEN-1);
-				client_send_message(client, &message_rcv, payload);
+				printf("Envoi du msg: %s\nà: %s\n",msg ,destinataire);
+				strncpy(message_rcv.infos, destinataire, INFOS_LEN-1);
+				client_send_message(client, &message_rcv, msg);
 
 			//Command /nick
 			}else if(strncmp(payload, "/nick ", 6) == 0){
@@ -180,10 +208,16 @@ int client_run(struct client *client){
 				
 				printf("%s\n",nickname);
 				if(strlen(nickname) >= NICK_LEN ){
-					printf("Invalid nickname (too long)\n");
+					fprintf(stderr,"Invalid nickname (too long)\n");
+					printf("Message: "); 
+					fflush(stdout);
+					continue;
 				}
-				else if(not_contain_only_digits_or_letters(nickname)){
-					printf("Invalid nickname (invalid characters)\n");
+				else if(strlen(nickname) == 0 || not_contain_only_digits_or_letters(nickname)){
+					fprintf(stderr,"Invalid nickname (invalid characters)\n");
+					printf("Message: "); 
+					fflush(stdout);
+					continue;
 				}
 				else{
 					printf("valide name!\n");
@@ -199,6 +233,7 @@ int client_run(struct client *client){
 				}
 			//ECHO normale
 			}else{
+				message_rcv.type = ECHO_SEND;
 				client_send_message(client, &message_rcv, payload);
 			}
 		}
@@ -211,9 +246,8 @@ int client_run(struct client *client){
 void client_close(struct client *client){
 	if(client->fd != -1){
 		close(client->fd);
+		client->fd = -1; // Sécurité : évite les doubles close
 	}
-	client->fd = -1;
-	exit(EXIT_SUCCESS);
 }
 
 

@@ -19,6 +19,7 @@
 
 struct client{
 	int fd; 
+	
 };
 
 void client_die(int ret, struct client *client,  char* msg){
@@ -73,19 +74,16 @@ int client_receive_message(struct client *client){
 	if(ret == 1){
 		printf("Serveur deconnecté.\n");
 		client_close(client);
-		if (payload != NULL) {
-			free(payload); 
-		}
+
 		exit(EXIT_SUCCESS);
 	}
-	if(payload != NULL){
-		printf("%s\n", payload);
-	}
+
+	printf("%s\n", payload);
 	fflush(stdout);
 	
-	if (payload != NULL) {
-		free(payload);
-	}
+
+	free(payload);
+
 	return EXIT_SUCCESS;
 }
 
@@ -141,7 +139,6 @@ int client_run(struct client *client){
 
 			// Le serveur reconnaît /quit dans le payload, pas dans le type.
 			if(strcmp(payload, "/quit") == 0){
-				memset(&message_send, 0, sizeof(message_send));
 				message_send.pld_len = size;
 				message_send.type = ECHO_SEND;
 				
@@ -152,14 +149,12 @@ int client_run(struct client *client){
 
 			//Command /who
 			}else if(strcmp(payload, "/who") == 0){
-				memset(&message_send, 0, sizeof(message_send));
 				message_send.pld_len= 0;
 				message_send.type = NICKNAME_LIST;
 				client_send_message(client, &message_send, NULL);
 
 			//Commande /whois User1
 			}else if(strncmp(payload, "/whois ", 7) == 0){
-				memset(&message_send, 0, sizeof(message_send));
 				message_send.pld_len= 0;
 				message_send.type = NICKNAME_INFOS;
 				
@@ -169,7 +164,6 @@ int client_run(struct client *client){
 
 			//Commande /msgall Hello
 			}else if(strncmp(payload, "/msgall ", 8) == 0){
-				memset(&message_send, 0, sizeof(message_send));
 				char* msg = payload + 8; //décalage du pointeur: pointe ver le msg directe
 				message_send.pld_len = strlen(msg) + 1 ;//inclusion du '\0'
 				message_send.type = BROADCAST_SEND;
@@ -194,8 +188,6 @@ int client_run(struct client *client){
 				memset(&message_send, 0, sizeof(message_send));
 				message_send.pld_len = strlen(msg) + 1 ;//inclusion du '\0'
 				message_send.type = UNICAST_SEND;
-				strncpy(message_send.infos, destinataire, INFOS_LEN-1);
-				printf("Envoi du msg: %s\nà: %s\n",msg ,destinataire);
 				strncpy(message_send.infos, destinataire, INFOS_LEN-1);
 				client_send_message(client, &message_send, msg);
 

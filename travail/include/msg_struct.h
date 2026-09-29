@@ -30,23 +30,6 @@ struct message {
 	char infos[INFOS_LEN];
 };
 
-static const char* msg_type_str[] = {
-	"NICKNAME_NEW",
-	"NICKNAME_LIST",
-	"NICKNAME_INFOS",
-	"ECHO_SEND",
-	"UNICAST_SEND", 
-	"BROADCAST_SEND",
-	"MULTICAST_CREATE",
-	"MULTICAST_LIST",
-	"MULTICAST_JOIN",
-	"MULTICAST_SEND",
-	"MULTICAST_QUIT",
-	"FILE_REQUEST",
-	"FILE_ACCEPT",
-	"FILE_REJECT",
-	"FILE_SEND",
-	"FILE_ACK"
-};
+extern const char *msg_type_str[];
 #endif
 

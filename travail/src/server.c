@@ -192,37 +192,55 @@ int server_handle_message(struct server *server, struct user *sender, const stru
 			break;
 		}
 		case ECHO_SEND: // without command
-			printf("Echo from %s\n", sender->nickname);
 			m_resp.type = ECHO_SEND;
-			m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[%s] : %s", sender->nickname, (char *)payload);
+			if(sender->nickname[0] != '\0'){
+				printf("Echo from %s\n", sender->nickname);
+				m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[%s] : %s", sender->nickname, (char *)payload);
+			}else{
+				printf("Echo from unknown user\n");
+				m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp), "[Me] : %s", (char*)payload);
+
+			}
 			protocol_send_message(sender->fd, &m_resp, payload_resp);
 			break;
 
 		case UNICAST_SEND:{ // /msg <pseudo> <message>
-			printf("%s sent /msg to %s\n", sender->nickname, message->infos);
-			struct user* target = user_list_find_by_nickname(&(server->users), message->infos);
-			m_resp.type = UNICAST_SEND; 
-			if(target == NULL){
-				m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[Server] : this nickname doesn't exist.");
+			if(sender->nickname[0] == '\0'){  // if nickname is not define. 
+				m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[Server] : create a pseudo with /nick first.");
 				protocol_send_message(sender->fd, &m_resp, payload_resp);
-
 			}else{
-				m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[%s] : %s", sender->nickname, (char*)payload);
-				protocol_send_message(target->fd, &m_resp, payload_resp);
+				printf("%s sent /msg to %s\n", sender->nickname, message->infos);
+				struct user* target = user_list_find_by_nickname(&(server->users), message->infos);
+				m_resp.type = UNICAST_SEND; 
+				if(target == NULL){
+					m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[Server] : this nickname doesn't exist.");
+					protocol_send_message(sender->fd, &m_resp, payload_resp);
+
+				}else{
+					m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[%s] : %s", sender->nickname, (char*)payload);
+					protocol_send_message(target->fd, &m_resp, payload_resp);
+
+				}
 			}
 			break;
 		}
 		case BROADCAST_SEND:{ // /msgall <message>
-			printf("%s sent /msgall\n", sender->nickname);
-			user_list current = server->users;
-			while(current != NULL){
-				if(current->user.fd != sender->fd){
-					memset(payload_resp, 0, sizeof(payload_resp));
-					m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[%s] : %s", sender->nickname, (char*)payload);
-					m_resp.type = BROADCAST_SEND; 
-					protocol_send_message(current->user.fd, &m_resp, payload_resp);
+			if(sender->nickname[0] == '\0'){  // if nickname is not define. 
+				m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[Server] : create a pseudo with /nick first.");
+				protocol_send_message(sender->fd, &m_resp, payload_resp);
+
+			}else{
+				printf("%s sent /msgall\n", sender->nickname);
+				user_list current = server->users;
+				while(current != NULL){
+					if(current->user.fd != sender->fd){
+						memset(payload_resp, 0, sizeof(payload_resp));
+						m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[%s] : %s", sender->nickname, (char*)payload);
+						m_resp.type = BROADCAST_SEND; 
+						protocol_send_message(current->user.fd, &m_resp, payload_resp);
+					}
+					current = current->next;
 				}
-				current = current->next;
 			}
 			break;
 		}

@@ -43,7 +43,9 @@ int protocol_recv_all(int socket_fd, void *buffer, size_t length){
 
 int protocol_send_message(int socket_fd, const struct message *message, const void *payload){
     protocol_send_all(socket_fd, message, sizeof(struct message));
-	protocol_send_all(socket_fd, payload, message->pld_len);
+    if(message->pld_len != 0){
+        protocol_send_all(socket_fd, payload, message->pld_len);
+    }
     return EXIT_SUCCESS;
 }
 

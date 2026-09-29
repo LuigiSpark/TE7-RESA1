@@ -8,12 +8,8 @@
 #include <unistd.h>
 #include <poll.h>
 
-#include <ctype.h> // For is_alpha / is_digit.
-#include <stdbool.h>
-
 #include "client.h"
 #include "protocol.h"
-
 
 #define MSG_LEN 1024
 
@@ -85,16 +81,6 @@ int client_receive_message(struct client *client){
 	return EXIT_SUCCESS;
 }
 
-bool not_contain_only_digits_or_letters(char string[]){
-	int s_len = strlen(string);
-	for(int i = 0; i < s_len; i++){
-		if(!isdigit(string[i]) || !isalpha(string[i])) {
-			return true; 
-		}
-	}
-	return false;
-}
-
 int client_run(struct client *client){
 	struct pollfd fds[2];
 
@@ -136,21 +122,10 @@ int client_run(struct client *client){
 			struct message message;
 			message.pld_len = size;
 
-			if(strcmp(payload, "/quit") == 0){
+			if(strcmp(payload, "/quit\'0'") == 0){
 				client_send_message(client, &message, payload);
 				printf("Disconnected.\n");
 				client_close(client);
-			}else if(strncmp(payload, "/nick ", 5) == 0){
-
-				//char* nickname = (payload + 5);
-				if(strlen(nickname) > 128 || not_contain_only_digits_or_letters(nickname)){
-					printf("Invalid....");
-				}else{
-						//message.nick_sender = payload + 5; 
-					client_send_message(client, &message, payload);
-				
-				}
-			
 			}else{
 				client_send_message(client, &message, payload);
 			}

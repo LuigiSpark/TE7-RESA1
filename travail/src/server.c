@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <poll.h>
 #include <string.h>
+#include <time.h>
 
 #include "protocol.h"
 #include "server.h"
@@ -25,6 +26,14 @@ void server_die(int ret, struct server *server,  char* msg){
 		server_close(server);
 		exit(EXIT_FAILURE);
 	}
+}
+
+void server_die_ptr(void *ptr, struct server *server, char *msg){
+    if(ptr == NULL){
+        perror(msg);
+        server_close(server);
+        exit(EXIT_FAILURE);
+    }
 }
 
 int handle_bind(const char *PORT_NUMBER){
@@ -85,11 +94,9 @@ int server_run(struct server *server){
 	server->users = NULL;
 
 	server->fds = (struct pollfd*)calloc((SOMAXCONN+1), sizeof(struct pollfd));
-	if(server->fds == NULL){
-		perror("Error while allocating pollfd structure");
-		server_close(server);
-		exit(EXIT_FAILURE);
-	}
+	server_die_ptr(server->fds, server, "Error while allocating pollfd structure");
+	
+
 	struct pollfd* fds = server->fds;
 	fds[0].fd = server->listen_fd;
 	fds[0].events = POLLIN;
@@ -110,13 +117,9 @@ int server_run(struct server *server){
 					server_accept_client(server);
 				}else{ // client sending message. 
 					struct user* sender = user_list_find_by_socket(&server->users, fds[i].fd);
-					int ret = server_receive_message(server, sender);
-					if(1 == ret){
-						printf("disconnected");
-						close(fds[i].fd);
-						user_list_remove(&server->users, fds[i].fd);
-						fds[i].fd = -1;
-					}
+
+					server_receive_message(server, sender);
+
 					fds[i].revents = 0;
 				}
 			}
@@ -124,27 +127,119 @@ int server_run(struct server *server){
 	}
 }
 
-int server_receive_message(struct server *server, struct user *sender){
-
-	struct message message;
-	char*payload;
-	int ret = protocol_recv_message(sender->fd, &message, (void**)&payload);
-	if(ret == 1) return 1; //Code for closing, 0 is used by EXIT_SUCCESS.
-
-
+int server_handle_message(struct server *server, struct user *sender, const struct message *message, void *payload){
+	
 	if(strcmp(payload, "/quit") == 0){
 		free(payload);
 		return 1;
 	}
+	int ret;
+	struct message m_resp = {0};
+	char payload_resp[1024] = {0};
+	switch(message->type){
 
-	printf("Received: %s\n", payload);
+		case NICKNAME_NEW:{ // /nick. 
 
-	protocol_send_message(sender->fd, &message, payload);
+			struct user* user = user_list_find_by_nickname(&(server->users), message->infos);
 
-	printf("Message sent!\n");
+			if(user == NULL){  //Nikename available.
+				char* ret_ptr = strcpy(sender->nickname,message->infos);
+				server_die_ptr(ret_ptr, server,"Error while copying nickname"); 
+
+				m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp), "Welcome %s\n", sender->nickname);
+			}else{ // Nickname already taken.
+				char* ret_ptr = strcpy(payload_resp, "[Serveur] : nickname already exists.\n");
+				server_die_ptr(ret_ptr, server,"Error while copying nickname");
+				
+			}
+			m_resp.pld_len = strlen(payload_resp);
+			protocol_send_message(sender->fd, &m_resp, payload_resp);
+
+			break;
+		}
+		case NICKNAME_LIST:{ // /who. 
+			size_t written = 0; 
+			written += snprintf(payload_resp + written, sizeof(payload_resp) - written, "[Serveur] : the connected users are : \n");
+
+			user_list current = server->users;
+			while(current != NULL){
+				written += snprintf(payload_resp + written, sizeof(payload_resp) - written, "%s\n", current->user.nickname);
+				current = current->next;
+			}
+			m_resp.type = NICKNAME_LIST;
+			m_resp.pld_len = written;
+			protocol_send_message(sender->fd, &m_resp, payload_resp);
+			break;
+		}
+		case NICKNAME_INFOS:{ // /whois <pseudo>
+			struct user* target = user_list_find_by_nickname(&(server->users), message->infos);
+			if(target == NULL){
+				m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[Server] : this nickname doesn't exist.");
+			}else{
+				m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),
+				"[Server] : %s connected since %s with IP address %s and port number %d\n",
+				target->nickname, ctime(&target->connect_time), target->IPv4, target->port);
+			}
+			protocol_send_message(sender->fd, &m_resp, payload_resp);
+
+			break;
+		}
+		case ECHO_SEND: // without command
+			m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[%s] : %s", sender->nickname, (char *)payload);
+			protocol_send_message(sender->fd, &m_resp, payload_resp);
+
+			break;
+
+		case UNICAST_SEND:{ // /msg <pseudo> <message>
+			struct user* target = user_list_find_by_nickname(&(server->users), message->infos);
+			if(target == NULL){
+				m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[Server] : this nickname doesn't exist.");
+				protocol_send_message(sender->fd, &m_resp, payload_resp);
+
+			}else{
+				m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[%s] : %s", sender->nickname, (char*)payload);
+				protocol_send_message(target->fd, &m_resp, payload_resp);
+			}
+			break;
+		}
+		case BROADCAST_SEND:{ // /msgall <message>
+			user_list current = server->users;
+			while(current != NULL){
+				if(current->user.fd != sender->fd){
+					memset(payload_resp, 0, sizeof(payload_resp));
+					m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[%s] : %s", sender->nickname, (char*)payload);
+					protocol_send_message(current->user.fd, &m_resp, payload_resp);
+				}
+				current = current->next;
+			}
+			break;
+		}
+
+		default:
+			printf("Unsupported message type %s\n", msg_type_str[message->type]);
+			break;
+	}
+
+	
 	
 	free(payload);
 	return EXIT_SUCCESS;
+}
+
+
+int server_receive_message(struct server *server, struct user *sender){
+	struct message message;
+	char*payload;
+
+	int ret = protocol_recv_message(sender->fd, &message, (void**)&payload);
+	if(1 == ret){
+		printf("disconnected");
+		close(sender->fd);
+        server->fds[sender->index].fd = -1;
+		user_list_remove(&server->users, sender->fd); 
+		return EXIT_SUCCESS;
+	}
+	return server_handle_message(server, sender, &message, payload);
 }
 
 int server_accept_client(struct server *server){
@@ -164,8 +259,8 @@ int server_accept_client(struct server *server){
 	user.fd = client_fd;
 	strcpy(user.IPv4, ip_client);
 	user.port = port_client;
-
-	user_list_add(&server->users, user);
+	user.connect_time = time(NULL);
+	user.nickname[0] = '\0';
 
 	struct pollfd* fds = server->fds;
 	for(int i = 0; i < SOMAXCONN+1; i++){
@@ -173,9 +268,12 @@ int server_accept_client(struct server *server){
 			fds[i].fd = client_fd;
 			fds[i].events = POLLIN;
 			fds[i].revents = 0;
+			user.index = i;
 			break;
 		}
 	}
+
+	user_list_add(&server->users, user);
 
 	return EXIT_SUCCESS;
 }

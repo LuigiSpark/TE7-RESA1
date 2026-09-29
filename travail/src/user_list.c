@@ -1,10 +1,19 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "user_list.h"
 
-struct user *user_list_find_by_nickname(user_list *users, const char *nickname);
-
+struct user *user_list_find_by_nickname(user_list *users, const char *nickname){
+	user_list current = *users;
+	while (current != NULL && strcmp(current->user.nickname, nickname) != 0) {
+        current = current->next;
+    }
+	if(current != NULL && strcmp(current->user.nickname, nickname) == 0){
+		return &(current->user);
+	}
+	return NULL;
+}
 struct user *user_list_find_by_socket(user_list *users, int socket_fd){
 	user_list current = *users;
 	while (current != NULL && current->user.fd != socket_fd) {

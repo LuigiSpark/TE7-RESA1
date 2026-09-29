@@ -136,44 +136,44 @@ int client_run(struct client *client){
 			}
 			payload[size-1] = '\0'; // replace \n by '\0'
 
-			struct message message_rcv;
-			memset(&message_rcv, 0, sizeof(message_rcv));
+			struct message message_send;
+			memset(&message_send, 0, sizeof(message_send));
 
 			// Le serveur reconnaît /quit dans le payload, pas dans le type.
 			if(strcmp(payload, "/quit") == 0){
-				memset(&message_rcv, 0, sizeof(message_rcv));
-				message_rcv.pld_len = size;
-				message_rcv.type = ECHO_SEND;
+				memset(&message_send, 0, sizeof(message_send));
+				message_send.pld_len = size;
+				message_send.type = ECHO_SEND;
 				
-				client_send_message(client, &message_rcv, payload);
+				client_send_message(client, &message_send, payload);
 				printf("Disconnected.\n");
 				client_close(client);
 				return EXIT_SUCCESS; // quitter la fct pour retourner au main()
 
 			//Command /who
 			}else if(strcmp(payload, "/who") == 0){
-				memset(&message_rcv, 0, sizeof(message_rcv));
-				message_rcv.pld_len= 0;
-				message_rcv.type = NICKNAME_LIST;
-				client_send_message(client, &message_rcv, NULL);
+				memset(&message_send, 0, sizeof(message_send));
+				message_send.pld_len= 0;
+				message_send.type = NICKNAME_LIST;
+				client_send_message(client, &message_send, NULL);
 
 			//Commande /whois User1
 			}else if(strncmp(payload, "/whois ", 7) == 0){
-				memset(&message_rcv, 0, sizeof(message_rcv));
-				message_rcv.pld_len= 0;
-				message_rcv.type = NICKNAME_INFOS;
+				memset(&message_send, 0, sizeof(message_send));
+				message_send.pld_len= 0;
+				message_send.type = NICKNAME_INFOS;
 				
 				char* nickname = (payload + 7);
-				strncpy(message_rcv.infos, nickname, INFOS_LEN-1);
-				client_send_message(client, &message_rcv, NULL);
+				strncpy(message_send.infos, nickname, INFOS_LEN-1);
+				client_send_message(client, &message_send, NULL);
 
 			//Commande /msgall Hello
 			}else if(strncmp(payload, "/msgall ", 8) == 0){
-				memset(&message_rcv, 0, sizeof(message_rcv));
+				memset(&message_send, 0, sizeof(message_send));
 				char* msg = payload + 8; //décalage du pointeur: pointe ver le msg directe
-				message_rcv.pld_len = strlen(msg) + 1 ;//inclusion du '\0'
-				message_rcv.type = BROADCAST_SEND;
-				client_send_message(client, &message_rcv, msg);
+				message_send.pld_len = strlen(msg) + 1 ;//inclusion du '\0'
+				message_send.type = BROADCAST_SEND;
+				client_send_message(client, &message_send, msg);
 
 			//Commande /msg user1 Hello
 			}else if(strncmp(payload, "/msg ", 5) == 0){
@@ -191,13 +191,13 @@ int client_run(struct client *client){
 				}else{
 					msg= ""; //msg vide?
 				}
-				memset(&message_rcv, 0, sizeof(message_rcv));
-				message_rcv.pld_len = strlen(msg) + 1 ;//inclusion du '\0'
-				message_rcv.type = UNICAST_SEND;
-				strncpy(message_rcv.infos, destinataire, INFOS_LEN-1);
+				memset(&message_send, 0, sizeof(message_send));
+				message_send.pld_len = strlen(msg) + 1 ;//inclusion du '\0'
+				message_send.type = UNICAST_SEND;
+				strncpy(message_send.infos, destinataire, INFOS_LEN-1);
 				printf("Envoi du msg: %s\nà: %s\n",msg ,destinataire);
-				strncpy(message_rcv.infos, destinataire, INFOS_LEN-1);
-				client_send_message(client, &message_rcv, msg);
+				strncpy(message_send.infos, destinataire, INFOS_LEN-1);
+				client_send_message(client, &message_send, msg);
 
 			//Command /nick
 			}else if(strncmp(payload, "/nick ", 6) == 0){
@@ -205,7 +205,7 @@ int client_run(struct client *client){
 				char* nickname = (payload + 6);
 				
 				printf("%s\n",nickname);
-				if(strlen(nickname) >= NICK_LEN ){
+				if(strlen(nickname) >= NICK_LEN){
 					fprintf(stderr,"Invalid nickname (too long)\n");
 					fflush(stdout);
 					continue;
@@ -216,20 +216,19 @@ int client_run(struct client *client){
 					continue;
 				}
 				else{
-					struct message message;
-					memset(&message, 0, sizeof(message));
-					message.pld_len = 0;
 
-					message.type = NICKNAME_NEW;
+					message_send.pld_len = 0;
+					message_send.type = NICKNAME_NEW;
 
-					strncpy(message.infos, nickname, INFOS_LEN-1);	
-					client_send_message(client, &message, NULL);
+					strncpy(message_send.infos, nickname, INFOS_LEN-1);	
+					client_send_message(client, &message_send, NULL);
 				
 				}
 			//ECHO normale
 			}else{
-				message_rcv.type = ECHO_SEND;
-				client_send_message(client, &message_rcv, payload);
+				message_send.type = ECHO_SEND;
+				message_send.pld_len = strlen(payload) + 1;
+				client_send_message(client, &message_send, payload);
 			}
 		}
 		if(fds[1].revents & POLLIN){

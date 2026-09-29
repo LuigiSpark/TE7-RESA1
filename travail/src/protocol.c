@@ -52,14 +52,26 @@ int protocol_send_message(int socket_fd, const struct message *message, const vo
 }
 
 // Struct message should be initialised before. 
+/* 1 = connexion fermée. 0 = message complet. */
 int protocol_recv_message(int socket_fd, struct message *message, void **payload){
     int ret = protocol_recv_all(socket_fd, message, sizeof(struct message));
-    if(ret == 1) return 1; //Prevent from reading again if connection is closed.
+    if(ret != (int)sizeof(struct message)) return 1;
 
-	*payload = (char*)malloc(sizeof(char)*message->pld_len);
+    if(message->pld_len == 0){
+        *payload = NULL;
+        return EXIT_SUCCESS;
+    }
 
-	ret = protocol_recv_all(socket_fd, *payload, sizeof(char)*message->pld_len);
-    return ret; 
+    *payload = malloc((size_t)message->pld_len);
+    if(*payload == NULL) return 1;
+
+    ret = protocol_recv_all(socket_fd, *payload, (size_t)message->pld_len);
+    if(ret != message->pld_len){
+        free(*payload);
+        *payload = NULL;
+        return 1;
+    }
+    return EXIT_SUCCESS;
 }
 
 int protocol_validate_message(const struct message *message);

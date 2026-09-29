@@ -9,7 +9,11 @@
 #include <poll.h>
 
 #include "client.h"
+#include "msg_struct.h"
 #include "protocol.h"
+
+#include <stdbool.h>
+#include <ctype.h>
 
 #define MSG_LEN 1024
 
@@ -73,7 +77,9 @@ int client_receive_message(struct client *client){
 		client_close(client);
 		exit(EXIT_SUCCESS);
 	}
-	printf("Received: %s\n", payload);
+	if(payload != NULL){
+		printf("Received: %s\n", payload);
+	}
 	printf("Message: ");
 	fflush(stdout);
 	
@@ -130,44 +136,50 @@ int client_run(struct client *client){
 			payload[size-1] = '\0'; // replace \n by '\0'
 
 			struct message message_rcv;
-			message_rcv.pld_len = size;
+			memset(&message_rcv, 0, sizeof(message_rcv));
 
-			//Commande /quit
+			// Le serveur reconnaît /quit dans le payload, pas dans le type.
 			if(strcmp(payload, "/quit") == 0){
+				message_rcv.pld_len = strlen(payload) + 1;
 				client_send_message(client, &message_rcv, payload);
 				printf("Disconnected.\n");
 				client_close(client);
 				printf("succes de commande\n");
 
 			//Command /who
-			}else if(strncmp(payload, "/who ", 5) == 0){
-				memset(&message_rcv, 0, sizeof(message_rcv));
+			}else if(strcmp(payload, "/who") == 0){
 				message_rcv.type = NICKNAME_LIST;
 				client_send_message(client, &message_rcv, NULL);
 
 			//Commande /whois User1
 			}else if(strncmp(payload, "/whois ", 7) == 0){
-				char* cible = (payload + 7);
-				memset(&message_rcv, 0, sizeof(message_rcv));
+				char* nickname = (payload + 7);
+
 				message_rcv.type = NICKNAME_INFOS;
-				strncpy(message_rcv.infos, cible, INFOS_LEN-1);
+				strncpy(message_rcv.infos, nickname, INFOS_LEN-1);
 				client_send_message(client, &message_rcv, NULL);
 
 			//Commande /msgall Hello
-			}else if(strncmp(payload, "/msg ", 5) == 0){
-				memset(&message_rcv, 0, sizeof(message_rcv));
-				message_rcv.pld_len = size;
+			}else if(strncmp(payload, "/msgall ", 8) == 0){
+				char *text = payload + 8;
 				message_rcv.type = BROADCAST_SEND;
-				client_send_message(client, &message_rcv, payload);
+				message_rcv.pld_len = strlen(text) + 1;
+				client_send_message(client, &message_rcv, text);
 
 			//Commande /msg user1 Hello
 			}else if(strncmp(payload, "/msg ", 5) == 0){
-				char* destinataire = (payload + 5);
-				memset(&message_rcv, 0, sizeof(message_rcv));
-				message_rcv.pld_len = size;
-				message_rcv.type = UNICAST_SEND;
-				strncpy(message_rcv.infos, destinataire, INFOS_LEN-1);
-				client_send_message(client, &message_rcv, payload);
+				char *rest = payload + 5;
+				char *space = strchr(rest, ' ');
+				if(space == NULL){
+					printf("Usage: /msg <pseudo> <message>\n");
+				}else{
+					*space = '\0';
+					char *text = space + 1;
+					message_rcv.type = UNICAST_SEND;
+					strncpy(message_rcv.infos, rest, INFOS_LEN-1);
+					message_rcv.pld_len = strlen(text) + 1;
+					client_send_message(client, &message_rcv, text);
+				}
 
 			//Command /nick
 			}else if(strncmp(payload, "/nick ", 6) == 0){
@@ -195,6 +207,8 @@ int client_run(struct client *client){
 				}
 			//ECHO normale
 			}else{
+				message_rcv.pld_len = size;
+				message_rcv.type = ECHO_SEND;
 				client_send_message(client, &message_rcv, payload);
 			}
 		}

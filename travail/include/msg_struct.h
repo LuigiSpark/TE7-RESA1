@@ -1,3 +1,6 @@
+#ifndef MSG_STRUCT_H
+#define MSG_STRUCT_H
+#define CLIENT_H
 #define NICK_LEN 128
 #define INFOS_LEN 128
 
@@ -45,4 +48,5 @@ static const char* msg_type_str[] = {
 	"FILE_SEND",
 	"FILE_ACK"
 };
+#endif
 

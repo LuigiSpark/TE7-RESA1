@@ -129,11 +129,10 @@ int server_run(struct server *server){
 
 int server_handle_message(struct server *server, struct user *sender, const struct message *message, void *payload){
 	
-	if(strcmp(payload, "/quit") == 0){
+	if(payload != NULL && strcmp(payload, "/quit") == 0){
 		free(payload);
 		return 1;
 	}
-	int ret;
 	struct message m_resp = {0};
 	char payload_resp[1024] = {0};
 	switch(message->type){
@@ -153,6 +152,7 @@ int server_handle_message(struct server *server, struct user *sender, const stru
 				
 			}
 			m_resp.pld_len = strlen(payload_resp);
+			m_resp.type = NICKNAME_NEW; 
 			protocol_send_message(sender->fd, &m_resp, payload_resp);
 
 			break;
@@ -180,18 +180,20 @@ int server_handle_message(struct server *server, struct user *sender, const stru
 				"[Server] : %s connected since %s with IP address %s and port number %d\n",
 				target->nickname, ctime(&target->connect_time), target->IPv4, target->port);
 			}
+			m_resp.type = NICKNAME_INFOS; 
 			protocol_send_message(sender->fd, &m_resp, payload_resp);
 
 			break;
 		}
 		case ECHO_SEND: // without command
+			m_resp.type = ECHO_SEND;
 			m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[%s] : %s", sender->nickname, (char *)payload);
 			protocol_send_message(sender->fd, &m_resp, payload_resp);
-
 			break;
 
 		case UNICAST_SEND:{ // /msg <pseudo> <message>
 			struct user* target = user_list_find_by_nickname(&(server->users), message->infos);
+			m_resp.type = UNICAST_SEND; 
 			if(target == NULL){
 				m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[Server] : this nickname doesn't exist.");
 				protocol_send_message(sender->fd, &m_resp, payload_resp);
@@ -208,6 +210,7 @@ int server_handle_message(struct server *server, struct user *sender, const stru
 				if(current->user.fd != sender->fd){
 					memset(payload_resp, 0, sizeof(payload_resp));
 					m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[%s] : %s", sender->nickname, (char*)payload);
+					m_resp.type = BROADCAST_SEND; 
 					protocol_send_message(current->user.fd, &m_resp, payload_resp);
 				}
 				current = current->next;

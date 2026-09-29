@@ -2,11 +2,15 @@
 #define USER_LIST_H
 
 #include <arpa/inet.h>
+#include "msg_struct.h" // For NICK_LEN.
 
 struct user{
     int fd;
+	int index; // in fds;
 	char IPv4[INET_ADDRSTRLEN];
 	int port; 
+	char nickname[NICK_LEN];
+	time_t connect_time;
 };
 
 typedef struct maillon{

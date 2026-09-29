@@ -62,8 +62,6 @@ int client_connect(struct client *client, const char *host, const char *port){
 
 int client_send_message(struct client *client, const struct message *message, const void *payload){
 	protocol_send_message(client->fd, message, payload);
-
-	printf("Message sent!\n");
 	return EXIT_SUCCESS;
 }
 
@@ -81,9 +79,8 @@ int client_receive_message(struct client *client){
 		exit(EXIT_SUCCESS);
 	}
 	if(payload != NULL){
-		printf("Received: %s\n", payload);
+		printf("%s\n", payload);
 	}
-	printf("Message: ");
 	fflush(stdout);
 	
 	if (payload != NULL) {
@@ -115,7 +112,6 @@ int client_run(struct client *client){
 	fds[1].events=POLLIN;
 	fds[1].revents=0;
 
-	printf("Message: ");
 	fflush(stdout);
 	
 	while(1){
@@ -163,12 +159,11 @@ int client_run(struct client *client){
 
 			//Commande /whois User1
 			}else if(strncmp(payload, "/whois ", 7) == 0){
-				char* cible = (payload + 7);
 				memset(&message_rcv, 0, sizeof(message_rcv));
 				message_rcv.pld_len= 0;
-				char* nickname = (payload + 7);
-
 				message_rcv.type = NICKNAME_INFOS;
+				
+				char* nickname = (payload + 7);
 				strncpy(message_rcv.infos, nickname, INFOS_LEN-1);
 				client_send_message(client, &message_rcv, NULL);
 
@@ -177,20 +172,15 @@ int client_run(struct client *client){
 				memset(&message_rcv, 0, sizeof(message_rcv));
 				char* msg = payload + 8; //décalage du pointeur: pointe ver le msg directe
 				message_rcv.pld_len = strlen(msg) + 1 ;//inclusion du '\0'
-			}else if(strncmp(payload, "/msgall ", 8) == 0){
-				char *text = payload + 8;
 				message_rcv.type = BROADCAST_SEND;
 				client_send_message(client, &message_rcv, msg);
-				message_rcv.pld_len = strlen(text) + 1;
-				client_send_message(client, &message_rcv, text);
 
 			//Commande /msg user1 Hello
 			}else if(strncmp(payload, "/msg ", 5) == 0){
 				char* destinataire = payload + 5; 
 				char* espace_msg= strchr(destinataire, ' ');//on cherche le 2eme espace, celui qui separt le msg du pseudo
 				if (espace_msg == NULL){
-					fprintf(stderr,"la commande est /msg <pseudo> <message>");
-					printf("Message: "); 
+					fprintf(stderr,"[Server] : /msg <pseudo> <message>");
 					fflush(stdout);
 					continue;
 				}
@@ -217,18 +207,15 @@ int client_run(struct client *client){
 				printf("%s\n",nickname);
 				if(strlen(nickname) >= NICK_LEN ){
 					fprintf(stderr,"Invalid nickname (too long)\n");
-					printf("Message: "); 
 					fflush(stdout);
 					continue;
 				}
 				else if(strlen(nickname) == 0 || not_contain_only_digits_or_letters(nickname)){
-					fprintf(stderr,"Invalid nickname (invalid characters)\n");
-					printf("Message: "); 
+					fprintf(stderr," [Server] : only digits and letters are accepted.\n"); 
 					fflush(stdout);
 					continue;
 				}
 				else{
-					printf("valide name!\n");
 					struct message message;
 					memset(&message, 0, sizeof(message));
 					message.pld_len = 0;

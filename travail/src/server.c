@@ -86,6 +86,7 @@ int server_listen(struct server *server, const char *port){
 	int ret = listen(server->listen_fd, SOMAXCONN);
 	server_die(ret, server, "Error while listenning");
 
+	printf("Listening on port %s\n", port);
 	return EXIT_SUCCESS;
 }
 
@@ -106,7 +107,8 @@ int server_run(struct server *server){
 	for(int i = 1; i < SOMAXCONN+1; i++){
 		fds[i].fd = -1; 
 	}
-
+	printf("Server is running...\n");
+	
 	while(1){
 		int ret = poll(fds, SOMAXCONN + 1, -1);
 		server_die(ret, server, "Error while polling");
@@ -130,6 +132,7 @@ int server_run(struct server *server){
 int server_handle_message(struct server *server, struct user *sender, const struct message *message, void *payload){
 	
 	if(payload != NULL && strcmp(payload, "/quit") == 0){
+		printf("%s quit\n", sender->nickname);
 		free(payload);
 		return 1;
 	}
@@ -144,12 +147,13 @@ int server_handle_message(struct server *server, struct user *sender, const stru
 			if(user == NULL){  //Nikename available.
 				char* ret_ptr = strcpy(sender->nickname,message->infos);
 				server_die_ptr(ret_ptr, server,"Error while copying nickname"); 
+				printf("Nick set: %s\n", sender->nickname);
 
-				m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp), "Welcome %s\n", sender->nickname);
+				m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp), "[Server] : Welcome %s\n", sender->nickname);
 			}else{ // Nickname already taken.
 				char* ret_ptr = strcpy(payload_resp, "[Serveur] : nickname already exists.\n");
 				server_die_ptr(ret_ptr, server,"Error while copying nickname");
-				
+				printf("Nick refused: %s\n", message->infos);
 			}
 			m_resp.pld_len = strlen(payload_resp);
 			m_resp.type = NICKNAME_NEW; 
@@ -158,6 +162,7 @@ int server_handle_message(struct server *server, struct user *sender, const stru
 			break;
 		}
 		case NICKNAME_LIST:{ // /who. 
+			printf("%s asked /who\n", sender->nickname);
 			size_t written = 0; 
 			written += snprintf(payload_resp + written, sizeof(payload_resp) - written, "[Serveur] : the connected users are : \n");
 
@@ -172,6 +177,7 @@ int server_handle_message(struct server *server, struct user *sender, const stru
 			break;
 		}
 		case NICKNAME_INFOS:{ // /whois <pseudo>
+			printf("%s asked /whois %s\n", sender->nickname, message->infos);
 			struct user* target = user_list_find_by_nickname(&(server->users), message->infos);
 			if(target == NULL){
 				m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[Server] : this nickname doesn't exist.");
@@ -186,12 +192,14 @@ int server_handle_message(struct server *server, struct user *sender, const stru
 			break;
 		}
 		case ECHO_SEND: // without command
+			printf("Echo from %s\n", sender->nickname);
 			m_resp.type = ECHO_SEND;
 			m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[%s] : %s", sender->nickname, (char *)payload);
 			protocol_send_message(sender->fd, &m_resp, payload_resp);
 			break;
 
 		case UNICAST_SEND:{ // /msg <pseudo> <message>
+			printf("%s sent /msg to %s\n", sender->nickname, message->infos);
 			struct user* target = user_list_find_by_nickname(&(server->users), message->infos);
 			m_resp.type = UNICAST_SEND; 
 			if(target == NULL){
@@ -205,6 +213,7 @@ int server_handle_message(struct server *server, struct user *sender, const stru
 			break;
 		}
 		case BROADCAST_SEND:{ // /msgall <message>
+			printf("%s sent /msgall\n", sender->nickname);
 			user_list current = server->users;
 			while(current != NULL){
 				if(current->user.fd != sender->fd){
@@ -236,7 +245,7 @@ int server_receive_message(struct server *server, struct user *sender){
 
 	int ret = protocol_recv_message(sender->fd, &message, (void**)&payload);
 	if(1 == ret){
-		printf("disconnected");
+		printf("Client disconnected\n");
 		close(sender->fd);
         server->fds[sender->index].fd = -1;
 		user_list_remove(&server->users, sender->fd); 
@@ -277,6 +286,7 @@ int server_accept_client(struct server *server){
 	}
 
 	user_list_add(&server->users, user);
+	printf("Client connected: %s:%d\n", ip_client, port_client);
 
 	return EXIT_SUCCESS;
 }

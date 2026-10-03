@@ -77,10 +77,38 @@ int client_receive_message(struct client *client){
 
 		exit(EXIT_SUCCESS);
 	}
+	switch(message.type){
+		case FILE_REQUEST:{
+			printf("%s wants you to accept the transfer of the file named \"%s\".\n", message.infos, payload);
+			int size = 0;
+			char answer[3] = {0};
 
-	printf("%s\n", payload);
-	fflush(stdout);
-	
+			while(strcmp(answer, "Y\n") != 0 && strcmp(answer, "N\n") != 0){
+				printf("Do you accept? [Y/N]\n");
+				size = 0;
+				while ((answer[size++] = getchar()) != '\n'){
+					if(size > 2)
+						size = 2;
+				}
+				answer[size] = '\0';
+			}
+			struct message message_send;
+			memset(&message_send, 0, sizeof(message_send));
+			message_send.pld_len= 0;
+
+			if(strcmp(answer, "Y\n") == 0){
+				message_send.type = FILE_ACCEPT;
+			}else{
+				message_send.type = FILE_REJECT;
+			}
+			client_send_message(client, &message_send, NULL);
+			break;
+		}
+		default:{
+			printf("%s\n", payload);
+			break;
+		}
+	}	
 
 	free(payload);
 
@@ -171,25 +199,21 @@ int client_run(struct client *client){
 
 			//Commande /msg user1 Hello
 			}else if(strncmp(payload, "/msg ", 5) == 0){
-				char* destinataire = payload + 5; 
-				char* espace_msg= strchr(destinataire, ' ');//on cherche le 2eme espace, celui qui separt le msg du pseudo
-				if (espace_msg == NULL){
-					fprintf(stderr,"[Server] : /msg <pseudo> <message>");
-					fflush(stdout);
+				char* pseudo = payload + 5; 
+				char* payload_msg = strchr(pseudo, ' '); // On cherche le 2eme espace, celui qui separt le msg du pseudo
+				if(payload_msg == NULL){
+					fprintf(stderr,"[Server] : /msg <pseudo> <message>\n");
 					continue;
-				}
-				char* msg = NULL;
-				if (espace_msg != NULL){
-					*(espace_msg)= '\0'; //on coupe temporairement pour isoler le pseudo
-					msg= espace_msg+1; //le msg commence juste après
 				}else{
-					msg= ""; //msg vide?
+					*payload_msg = '\0';
+					payload_msg++; // Le msg commence juste après.
+
+					message_send.pld_len = strlen(payload_msg) + 1 ;//inclusion du '\0'
+					message_send.type = UNICAST_SEND;
+					
+					strncpy(message_send.infos, pseudo, INFOS_LEN-1);
+					client_send_message(client, &message_send, payload_msg);
 				}
-				memset(&message_send, 0, sizeof(message_send));
-				message_send.pld_len = strlen(msg) + 1 ;//inclusion du '\0'
-				message_send.type = UNICAST_SEND;
-				strncpy(message_send.infos, destinataire, INFOS_LEN-1);
-				client_send_message(client, &message_send, msg);
 
 			//Command /nick
 			}else if(strncmp(payload, "/nick ", 6) == 0){
@@ -217,7 +241,26 @@ int client_run(struct client *client){
 				
 				}
 			//ECHO normale
-			}else{
+			}else if(strncmp(payload, "/send ", 6) == 0){
+				char* pseudo = payload + 6; 
+				char* file_name = strchr(pseudo, ' '); // On cherche le 2eme espace, celui qui separt le msg du pseudo
+				if(file_name == NULL){
+					fprintf(stderr,"[Server] : /send <pseudo> <file name>\n");
+					continue;
+				}else{
+					*file_name = '\0';
+					file_name++;  // Le nom du fichier commence juste après.
+
+					message_send.pld_len = strlen(file_name) + 1 ;//inclusion du '\0'
+					message_send.type = FILE_REQUEST;
+
+					strncpy(message_send.infos, pseudo, INFOS_LEN-1);
+					client_send_message(client, &message_send, file_name);
+				}
+
+			//Command /nick
+			}
+			else{
 				message_send.type = ECHO_SEND;
 				message_send.pld_len = strlen(payload) + 1;
 				client_send_message(client, &message_send, payload);

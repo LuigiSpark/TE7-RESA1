@@ -10,6 +10,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "msg_struct.h"
 #include "protocol.h"
 #include "server.h"
 #include "user_list.h"
@@ -235,11 +236,34 @@ int server_handle_message(struct server *server, struct user *sender, const stru
 				while(current != NULL){
 					if(current->user.fd != sender->fd){
 						memset(payload_resp, 0, sizeof(payload_resp));
-						m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[%s] : %s", sender->nickname, (char*)payload);
+						m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"%s", (char*)payload);
 						m_resp.type = BROADCAST_SEND; 
 						protocol_send_message(current->user.fd, &m_resp, payload_resp);
 					}
 					current = current->next;
+				}
+			}
+			break;
+		}
+		case FILE_REQUEST:{ // /msg <pseudo> <file_message>
+			if(sender->nickname[0] == '\0'){  // if nickname is not define. 
+				m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[Server] : create a pseudo with /nick first.");
+				protocol_send_message(sender->fd, &m_resp, payload_resp);
+			}else{
+				printf("%s sent request for sending file to %s\n", sender->nickname, message->infos);
+				struct user* target = user_list_find_by_nickname(&(server->users), message->infos);
+				m_resp.type = FILE_REQUEST; 
+
+				char* ret = strcpy(m_resp.infos, sender->nickname);
+				server_die_ptr(ret, server, "Error while copying (strcpy)");
+				
+				if(target == NULL){
+					m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[Server] : this nickname doesn't exist.");
+					protocol_send_message(sender->fd, &m_resp, payload_resp);
+
+				}else{
+					m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[%s] : %s", sender->nickname, (char*)payload);
+					protocol_send_message(target->fd, &m_resp, payload_resp);
 				}
 			}
 			break;

@@ -3,6 +3,7 @@
 #define CLIENT_H
 #define NICK_LEN 128
 #define INFOS_LEN 128
+#define PROTO_MAX_PAYLOAD 65536
 
 enum msg_type { 
 	NICKNAME_NEW,

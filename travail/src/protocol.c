@@ -45,7 +45,7 @@ int protocol_send_all(int socket_fd, const void *buffer, size_t length){
     return ret + 1;
 }
 
-// Return 1 if the socket connection is closed.
+// Return 1 if the socket connection is closed, 0 when all bytes were received.
 int protocol_recv_all(int socket_fd, void *buffer, size_t length){
     int ret;
     size_t received = 0;
@@ -54,11 +54,11 @@ int protocol_recv_all(int socket_fd, void *buffer, size_t length){
         die(ret, "Error while reading");
 
         if(ret == 0){
-            break;
+            return 1;
         }
         received += ret;
     }
-    return received;
+    return 0;
 }
 
 
@@ -74,7 +74,7 @@ int protocol_send_message(int socket_fd, const struct message *message, const vo
 /* 1 = connexion fermée. 0 = message complet. */
 int protocol_recv_message(int socket_fd, struct message *message, void **payload){
     int ret = protocol_recv_all(socket_fd, message, sizeof(struct message));
-    if(ret != (int)sizeof(struct message)) return 1;
+    if(ret == 1) return 1;
 
     if(message->pld_len == 0){
         *payload = NULL;
@@ -85,7 +85,7 @@ int protocol_recv_message(int socket_fd, struct message *message, void **payload
     if(*payload == NULL) return 1;
 
     ret = protocol_recv_all(socket_fd, *payload, (size_t)message->pld_len);
-    if(ret != message->pld_len){
+    if(ret == 1){
         free(*payload);
         *payload = NULL;
         return 1;

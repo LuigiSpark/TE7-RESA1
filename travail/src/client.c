@@ -123,124 +123,131 @@ int client_receive_message(struct client *client){
 			}
 			struct message message_send;
 			memset(&message_send, 0, sizeof(message_send));
-			char* pseudo;
-			char* fichier;
-			int ret= cut_in_half(payload+strlen("/send "), ' ', &pseudo, &fichier);
-			if(EXIT_FAILURE == ret){
-				printf("/send <pseudo> <file_name>\n");
-				break;
-			}
-			// On garde le nom du fichier dans infos
-			strncpy(message_send.infos, fichier, INFOS_LEN - 1);
-			// On garde le nom de l'emetteur dans nick_sender
-			strncpy(message_send.nick_sender, pseudo, NICK_LEN - 1);
+			strncpy(message_send.infos, message.infos, INFOS_LEN - 1);
 
-			message_send.pld_len= 0;
 			if(strcmp(answer, "Y\n") == 0){
-				message_send.type = FILE_ACCEPT;
-
-				//Création du socket d'écoute temporaire
 				int c2c_listen_fd = socket(AF_INET, SOCK_STREAM, 0);
-				client2client_die(c2c_listen_fd,"On client2client listening...\n");
+				client2client_die(c2c_listen_fd, "On c2c socket...");
 
 				struct sockaddr_in client2client_addr;
 				memset(&client2client_addr, 0, sizeof(client2client_addr));
 				client2client_addr.sin_family = AF_INET;
-				client2client_addr.sin_port = htons(1234);
+				client2client_addr.sin_port = htons(0);
 				inet_aton("127.0.0.1", &client2client_addr.sin_addr);
 
-				//listening
-				int ret_bind = bind(c2c_listen_fd, (struct sockaddr *)&client2client_addr, sizeof(client2client_addr));
-    			client2client_die(ret_bind,"On binding...\n");
-    
+				int ret_bind = bind(c2c_listen_fd, (struct sockaddr*)&client2client_addr, sizeof(client2client_addr));
+				client2client_die(ret_bind, "On c2c bind...");
+
+				socklen_t addr_len = sizeof(client2client_addr);
+				getsockname(c2c_listen_fd, (struct sockaddr*)&client2client_addr, &addr_len);
+				int c2c_port = ntohs(client2client_addr.sin_port);
+
 				int ret_listen = listen(c2c_listen_fd, 1);
-				client2client_die(ret_listen,"On listening...\n");
+				client2client_die(ret_listen, "On c2c listen...");
+
+				char c2c_addr_str[32];
+				snprintf(c2c_addr_str, sizeof(c2c_addr_str), "127.0.0.1:%d", c2c_port);
+				message_send.type = FILE_ACCEPT;
+				message_send.pld_len = strlen(c2c_addr_str) + 1;
+				client_send_message(client, &message_send, c2c_addr_str);
 
 				struct sockaddr_in client_addr = {0};
-				client_addr.sin_family=AF_INET;
-
 				socklen_t sizeofaddr = sizeof(client_addr);
 				printf("start accepting...\n");
-				int client_fd = accept(c2c_listen_fd, (struct sockaddr *)&client_addr,&sizeofaddr);
-				
+				int client_fd = accept(c2c_listen_fd, (struct sockaddr*)&client_addr, &sizeofaddr);
 				client2client_die(client_fd, "On accepting...");
-				printf("Client 2 : Client connection established");
+				printf("Client connection established\n");
+				close(c2c_listen_fd);
 
-				int fd_file = open(fichier, O_CREAT | O_TRUNC | O_WRONLY, S_IRWXU);
+				int fd_file = open((char*)payload, O_CREAT | O_TRUNC | O_WRONLY, S_IRWXU);
+				client2client_die(fd_file, "On open file...");
 
 				struct message message;
 				memset(&message, 0, sizeof(message));
-				char payload[PROTO_MAX_PAYLOAD] = {0};
-				int n;
-				while(protocol_recv_message(c2c_listen_fd, &message,(void*)&payload) == 0){
+				void* file_payload = NULL;
+				while(protocol_recv_message(client_fd, &message, &file_payload) == 0 && message.type == FILE_SEND){
 					if(protocol_validate_message(&message) != 0){
 						message.type = FILE_ERROR;
 						message.pld_len = 0;
+						protocol_send_message(client_fd, &message, NULL);
 					}else{
-						protocol_send_all(fd_file, payload, message.pld_len);
+						protocol_send_all(fd_file, file_payload, message.pld_len);
 					}
-					message.type = FILE_ACK;
-					message.pld_len = 0;
-					protocol_send_message(c2c_listen_fd, &message, NULL);
-
+					free(file_payload);
+					file_payload = NULL;
 				}
+				if(file_payload != NULL){ free(file_payload); }
+
 				message.pld_len = 0;
 				message.type = FILE_ACK;
-				protocol_send_message(c2c_listen_fd, &message, NULL);
+				protocol_send_message(client_fd, &message, NULL);
 
-
+				close(fd_file);
+				close(client_fd);
 
 			}else{
 				message_send.type = FILE_REJECT;
 				client_send_message(client, &message_send, NULL);
 			}
-			
-			char* ptr = strcpy(message_send.infos, message.infos);
-			client_die_ptr(ptr, client, "Error while copying (strcpy)");
-
-			client_send_message(client, &message_send, NULL);
 			break;
 		}
 		case FILE_ACCEPT:{
 			printf("The user has accepted the transfer.\n");
-			//Send the file on the socket open by the other client : IP + port in the payload.
-			char* host; char*port; 
-			cut_in_half(payload, ' ', &host, &port);
+			char* host; char* port;
+			cut_in_half(payload, ':', &host, &port);
 
 			int s_fd = socket(AF_INET, SOCK_STREAM, 0);
 			client_die(s_fd, client, "Error while creating socket");
-			struct sockaddr_in sockaddr_client = {0};
 
+			struct sockaddr_in sockaddr_client = {0};
 			sockaddr_client.sin_family = AF_INET;
-			sockaddr_client.sin_port = htons(atoi(port)); 
+			sockaddr_client.sin_port = htons(atoi(port));
 			inet_aton(host, &sockaddr_client.sin_addr);
 
 			int ret = connect(s_fd, (const struct sockaddr*)&sockaddr_client, sizeof(sockaddr_client));
-			close(s_fd); client_die(ret, client, "Error while connecting");
-			break;
-			
+			client_die(ret, client, "Error while connecting");
+
 			int fd_file = open(client->file_name, O_RDONLY);
-			close(s_fd); client_die(ret, client, "Error while opening file");
+			client_die(fd_file, client, "Error while opening file");
 
 			struct message message;
 			memset(&message, 0, sizeof(message));
-			char payload[PROTO_MAX_PAYLOAD] = {0};
+			message.type = FILE_SEND;
+
+			strncpy(message.infos, client->file_name, INFOS_LEN - 1);
+			
+			char payload[PROTO_MAX_PAYLOAD];
 			int n;
 
 			while((n = read(fd_file, payload, sizeof(payload))) > 0){
-
 				message.pld_len = n;
-				message.pld_len = FILE_SEND;
 				protocol_send_message(s_fd, &message, payload);
 
-				while(protocol_recv_message(s_fd, &message, NULL), message.type == FILE_ERROR){
+				void* payload_resp = NULL;
+				struct message msg_resp;
 
+				protocol_recv_message(s_fd, &msg_resp, &payload_resp);
+				if(payload_resp != NULL){ free(payload_resp); }
+
+				if(msg_resp.type == FILE_ERROR){
 					message.pld_len = n;
-					message.pld_len = FILE_SEND;
-					protocol_send_message(s_fd, &message, payload);
+					protocol_send_message(s_fd, &message, buf);
 				}
 			}
-			printf("Le fichier a bien été envoyé.\n")
+			close(fd_file);
+
+			message.pld_len = 0;
+			message.type = FILE_ACK;
+			protocol_send_message(s_fd, &message, NULL);
+
+			void* ack_payload = NULL;
+			struct message msg_ack;
+			protocol_recv_message(s_fd, &msg_ack, &ack_payload);
+			if(ack_payload != NULL){ free(ack_payload); }
+
+			printf("%s has received the file.\n", client->file_name);
+			close(s_fd);
+			break;
 		}
 		case FILE_REJECT:{
 			printf("The user has refused the transfer.\n");
@@ -345,6 +352,7 @@ int client_run(struct client *client){
 
 			//Commande /msg user1 Hello
 			}else if(strncmp(payload, "/msg ", 5) == 0){
+
 				char* pseudo = payload + 5; 
 				char* payload_msg = strchr(pseudo, ' '); // On cherche le 2eme espace, celui qui separt le msg du pseudo
 				if(payload_msg == NULL){

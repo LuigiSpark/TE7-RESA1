@@ -92,5 +92,3 @@ int protocol_recv_message(int socket_fd, struct message *message, void **payload
     }
     return EXIT_SUCCESS;
 }
-
-int protocol_validate_message(const struct message *message);

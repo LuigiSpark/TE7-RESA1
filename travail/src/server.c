@@ -245,7 +245,7 @@ int server_handle_message(struct server *server, struct user *sender, const stru
 			}
 			break;
 		}
-		case FILE_REQUEST:{ // /msg <pseudo> <file_message>
+		case FILE_REQUEST:{
 			if(sender->nickname[0] == '\0'){  // if nickname is not define. 
 				m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[Server] : create a pseudo with /nick first.");
 				protocol_send_message(sender->fd, &m_resp, payload_resp);
@@ -262,10 +262,26 @@ int server_handle_message(struct server *server, struct user *sender, const stru
 					protocol_send_message(sender->fd, &m_resp, payload_resp);
 
 				}else{
-					m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[%s] : %s", sender->nickname, (char*)payload);
+					m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"%s", sender->nickname);
 					protocol_send_message(target->fd, &m_resp, payload_resp);
 				}
 			}
+			break;
+		}
+		case FILE_ACCEPT:{ 
+			printf("%s has accepted the tranfer.\n", sender->nickname);
+			struct user* target = user_list_find_by_nickname(&(server->users), message->infos);
+			m_resp.type = FILE_ACCEPT; 
+			m_resp.pld_len = message->pld_len;
+			protocol_send_message(target->fd, &m_resp, payload); // Transfer IP + port in the payload.
+			break;
+		}
+		case FILE_REJECT:{ 
+			printf("%s has rejected the tranfer.\n", sender->nickname);
+			struct user* target = user_list_find_by_nickname(&(server->users), message->infos);
+			m_resp.type = FILE_REJECT; 
+			m_resp.pld_len = 0;
+			protocol_send_message(target->fd, &m_resp, NULL); 
 			break;
 		}
 

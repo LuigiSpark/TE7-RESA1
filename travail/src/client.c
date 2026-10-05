@@ -19,11 +19,19 @@
 
 struct client{
 	int fd; 
-	
+	char nickname[NICK_LEN];
 };
 
 void client_die(int ret, struct client *client,  char* msg){
 	if(ret < 0){
+		perror(msg);
+		client_close(client);
+		exit(EXIT_FAILURE);
+	}
+}
+
+void client_die_ptr(void* ptr, struct client *client,  char* msg){
+	if(NULL == ptr){
 		perror(msg);
 		client_close(client);
 		exit(EXIT_FAILURE);
@@ -58,6 +66,7 @@ int client_connect(struct client *client, const char *host, const char *port){
 	}
 	freeaddrinfo(result);
 	client->fd = sfd;
+	client->nickname[0] = '\0';
 	return EXIT_SUCCESS;
 }
 
@@ -95,13 +104,26 @@ int client_receive_message(struct client *client){
 			struct message message_send;
 			memset(&message_send, 0, sizeof(message_send));
 			message_send.pld_len= 0;
-
 			if(strcmp(answer, "Y\n") == 0){
 				message_send.type = FILE_ACCEPT;
 			}else{
 				message_send.type = FILE_REJECT;
 			}
+			
+			char* ret = strcpy(message_send.infos, message.infos);
+			client_die_ptr(ret, client, "Error while copying (strcpy)");
+
 			client_send_message(client, &message_send, NULL);
+			break;
+		}
+		case FILE_ACCEPT:{
+			printf("The user has accepted the transfer.\n");
+			//Send the file on the socket open by the other client : IP + port in the payload. 
+
+			break;
+		}
+		case FILE_REJECT:{
+			printf("The user has refused the transfer.\n");
 			break;
 		}
 		default:{
@@ -236,6 +258,7 @@ int client_run(struct client *client){
 					message_send.pld_len = 0;
 					message_send.type = NICKNAME_NEW;
 
+					strncpy(client->nickname, nickname, INFOS_LEN-1);
 					strncpy(message_send.infos, nickname, INFOS_LEN-1);	
 					client_send_message(client, &message_send, NULL);
 				

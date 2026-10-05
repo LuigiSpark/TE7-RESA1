@@ -81,7 +81,8 @@ int protocol_recv_message(int socket_fd, struct message *message, void **payload
         *payload = NULL;
         return EXIT_SUCCESS;
     }
-
+    protocol_validate_message(message); //Validation du message avant de faire l'allocation
+    
     *payload = malloc((size_t)message->pld_len);
     if(*payload == NULL) return 1;
 
@@ -101,7 +102,7 @@ int protocol_validate_message(const struct message *message){
     }
 
     if (message->pld_len > PROTO_MAX_PAYLOAD){
-        fprintf(stderr, "[Protocole Error]: Payload length %u exceeds limit\n", message->pld_len);
+        fprintf(stderr, "[Protocole Error]: Payload length %d exceeds limit\n", message->pld_len);
         return EXIT_FAILURE;
     }
 

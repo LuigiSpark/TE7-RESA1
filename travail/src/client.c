@@ -24,6 +24,13 @@ struct client{
 	char file_name[NICK_LEN];
 };
 
+void client2client_die(int ret, char*msg){
+	if (ret<0){
+		perror(msg);
+		exit(EXIT_FAILURE);
+	}
+}
+
 void client_die(int ret, struct client *client,  char* msg){
 	if(ret < 0){
 		perror(msg);
@@ -116,11 +123,51 @@ int client_receive_message(struct client *client){
 			}
 			struct message message_send;
 			memset(&message_send, 0, sizeof(message_send));
+			char* pseudo;
+			char* fichier;
+			int ret= cut_in_half(payload+strlen("/send "), ' ', pseudo, fichier);
+			if(ret=EXIT_FAILURE){printf("/send <pseudo> <file_name>\n")}
+			// On garde le nom du fichier dans infos
+			strncpy(message_send.infos, fichier, INFOS_LEN - 1);
+			// On garde le nom de l'emetteur dans nick_sender
+			strncpy(message_send.nick_sender, pseudo, NICK_LEN - 1);
+
 			message_send.pld_len= 0;
 			if(strcmp(answer, "Y\n") == 0){
 				message_send.type = FILE_ACCEPT;
+
+				//Création du socket d'écoute temporaire
+				int client2client_listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+				client2client_die(client2client_listen_fd,"On client2client listening...\n");
+
+				struct sockaddr_in client2client_addr;
+				memset(&client2client_addr, 0, sizeof(client2client_addr));
+				client2client_addr.sin_family = AF_INET;
+				client2client_addr.sin_port = htons(1234);
+				inet_aton("127.0.0.1", &client2client_addr.sin_addr);
+
+				//listening
+				int ret_bind = bind(client2client_listen_fd, (struct sockaddr *)&client2client_addr, sizeof(client2client_addr));
+    			client2client_die(ret_bind,"On binding...\n");
+    
+				int ret_listen = listen(client2client_listen_fd, 1);
+				client2client_die(ret_listen,"On listening...\n");
+
+				struct sockaddr_in client_addr = {0};
+				client_addr.sin_family=AF_INET;
+
+				socklen_t sizeofaddr = sizeof(client_addr);
+				printf("start accepting...\n");
+				int client_fd = accept(client2client_listen_fd, (struct sockaddr *)&client_addr,&sizeofaddr);
+				
+				// 
+				client2client_die(client_fd, "On accepting...");
+				printf("Client 2 Client connection established");
+
+
 			}else{
 				message_send.type = FILE_REJECT;
+				client_send_message(client, &message_send, NULL);
 			}
 			
 			char* ret = strcpy(message_send.infos, message.infos);
@@ -304,7 +351,7 @@ int client_run(struct client *client){
 					client_send_message(client, &message_send, NULL);
 				
 				}
-			//ECHO normale
+			//Command send
 			}else if(strncmp(payload, "/send ", 6) == 0){
 				char* pseudo = payload + 6; 
 				char* sep = strchr(pseudo, ' '); // On cherche le 2eme espace, celui qui separt le msg du pseudo

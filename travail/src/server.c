@@ -252,16 +252,17 @@ int server_handle_message(struct server *server, struct user *sender, const stru
 			}else{
 				printf("%s sent request for sending file to %s\n", sender->nickname, message->infos);
 				struct user* target = user_list_find_by_nickname(&(server->users), message->infos);
-				m_resp.type = FILE_REQUEST; 
 
 				char* ret = strcpy(m_resp.infos, sender->nickname);
 				server_die_ptr(ret, server, "Error while copying (strcpy)");
 				
 				if(target == NULL){
+					m_resp.type = ECHO_SEND; 
 					m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"[Server] : this nickname doesn't exist.");
 					protocol_send_message(sender->fd, &m_resp, payload_resp);
 
 				}else{
+					m_resp.type = FILE_REQUEST; 
 					m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"%s", sender->nickname);
 					protocol_send_message(target->fd, &m_resp, payload_resp);
 				}
@@ -271,6 +272,7 @@ int server_handle_message(struct server *server, struct user *sender, const stru
 		case FILE_ACCEPT:{ 
 			printf("%s has accepted the tranfer.\n", sender->nickname);
 			struct user* target = user_list_find_by_nickname(&(server->users), message->infos);
+			if (target == NULL) break; // If the client is disconnected for instance
 			m_resp.type = FILE_ACCEPT; 
 			m_resp.pld_len = message->pld_len;
 			protocol_send_message(target->fd, &m_resp, payload); // Transfer IP + port in the payload.
@@ -279,6 +281,7 @@ int server_handle_message(struct server *server, struct user *sender, const stru
 		case FILE_REJECT:{ 
 			printf("%s has rejected the tranfer.\n", sender->nickname);
 			struct user* target = user_list_find_by_nickname(&(server->users), message->infos);
+			if (target == NULL) break; // If the client is disconnected for instance
 			m_resp.type = FILE_REJECT; 
 			m_resp.pld_len = 0;
 			protocol_send_message(target->fd, &m_resp, NULL); 

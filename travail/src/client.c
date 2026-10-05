@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <poll.h>
+#include <fcntl.h>
 
 #include "client.h"
 #include "msg_struct.h"
@@ -20,6 +21,7 @@
 struct client{
 	int fd; 
 	char nickname[NICK_LEN];
+	char file_name[NICK_LEN];
 };
 
 void client_die(int ret, struct client *client,  char* msg){
@@ -38,6 +40,16 @@ void client_die_ptr(void* ptr, struct client *client,  char* msg){
 	}
 }
 
+int cut_in_half(char*str, char sep, char**first_half, char**second_half){
+	char *sep_str = strchr(str, sep);
+	if(sep_str == NULL){
+		return EXIT_FAILURE;
+	}
+	*sep_str = '\0';
+	*first_half = str;
+	*second_half = sep_str + 1;
+	return EXIT_SUCCESS;
+}
 
 int client_connect(struct client *client, const char *host, const char *port){
 	struct addrinfo hints, *result, *rp;
@@ -67,6 +79,7 @@ int client_connect(struct client *client, const char *host, const char *port){
 	freeaddrinfo(result);
 	client->fd = sfd;
 	client->nickname[0] = '\0';
+	client->file_name[0] = '\0';
 	return EXIT_SUCCESS;
 }
 
@@ -118,12 +131,42 @@ int client_receive_message(struct client *client){
 		}
 		case FILE_ACCEPT:{
 			printf("The user has accepted the transfer.\n");
-			//Send the file on the socket open by the other client : IP + port in the payload. 
+			//Send the file on the socket open by the other client : IP + port in the payload.
+			char* host; char*port; 
+			cut_in_half(payload, ' ', &host, &port);
 
+			int s_fd = socket(AF_INET, SOCK_STREAM, 0);
+			client_die(s_fd, client, "Error while creating socket");
+			struct sockaddr_in sockaddr_client = {0};
+
+			sockaddr_client.sin_family = AF_INET;
+			sockaddr_client.sin_port = htons(atoi(port)); 
+			inet_aton(host, &sockaddr_client.sin_addr);
+
+			int ret = connect(s_fd, (const struct sockaddr*)&sockaddr_client, sizeof(sockaddr_client));
+			close(s_fd); client_die(ret, client, "Error while connecting");
 			break;
+			
+			int fd_file = open(client->file_name, O_RDONLY);
+			close(s_fd); client_die(ret, client, "Error while opening file");
+
+			struct message message;
+			memset(&message, 0, sizeof(message));
+			char payload[PROTO_MAX_PAYLOAD] = {0};
+			int n;
+
+			while((n = read(fd_file, payload, sizeof(payload))) > 0){
+				message.pld_len = n;
+				message.pld_len = FILE_SEND;
+				protocol_send_message(s_fd, &message, payload);
+			}
 		}
 		case FILE_REJECT:{
 			printf("The user has refused the transfer.\n");
+			break;
+		}
+		case FILE_ACK:{
+			printf("The user has received the file.\n");
 			break;
 		}
 		default:{
@@ -245,12 +288,10 @@ int client_run(struct client *client){
 				printf("%s\n",nickname);
 				if(strlen(nickname) >= NICK_LEN){
 					fprintf(stderr,"Invalid nickname (too long)\n");
-					fflush(stdout);
 					continue;
 				}
 				else if(strlen(nickname) == 0 || not_contain_only_digits_or_letters(nickname)){
 					fprintf(stderr," [Server] : only digits and letters are accepted.\n"); 
-					fflush(stdout);
 					continue;
 				}
 				else{
@@ -266,14 +307,16 @@ int client_run(struct client *client){
 			//ECHO normale
 			}else if(strncmp(payload, "/send ", 6) == 0){
 				char* pseudo = payload + 6; 
-				char* file_name = strchr(pseudo, ' '); // On cherche le 2eme espace, celui qui separt le msg du pseudo
+				char* sep = strchr(pseudo, ' '); // On cherche le 2eme espace, celui qui separt le msg du pseudo
+				*sep = '\0';
+				char* file_name = sep + 1;  // Le nom du fichier commence juste après.
+
 				if(file_name == NULL){
 					fprintf(stderr,"[Server] : /send <pseudo> <file name>\n");
 					continue;
 				}else{
-					*file_name = '\0';
-					file_name++;  // Le nom du fichier commence juste après.
-
+					
+					strncpy(client->file_name, file_name, INFOS_LEN-1);	
 					message_send.pld_len = strlen(file_name) + 1 ;//inclusion du '\0'
 					message_send.type = FILE_REQUEST;
 

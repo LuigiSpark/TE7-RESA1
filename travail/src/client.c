@@ -125,8 +125,11 @@ int client_receive_message(struct client *client){
 			memset(&message_send, 0, sizeof(message_send));
 			char* pseudo;
 			char* fichier;
-			int ret= cut_in_half(payload+strlen("/send "), ' ', pseudo, fichier);
-			if(ret=EXIT_FAILURE){printf("/send <pseudo> <file_name>\n")}
+			int ret= cut_in_half(payload+strlen("/send "), ' ', &pseudo, &fichier);
+			if(EXIT_FAILURE == ret){
+				printf("/send <pseudo> <file_name>\n");
+				break;
+			}
 			// On garde le nom du fichier dans infos
 			strncpy(message_send.infos, fichier, INFOS_LEN - 1);
 			// On garde le nom de l'emetteur dans nick_sender
@@ -137,8 +140,8 @@ int client_receive_message(struct client *client){
 				message_send.type = FILE_ACCEPT;
 
 				//Création du socket d'écoute temporaire
-				int client2client_listen_fd = socket(AF_INET, SOCK_STREAM, 0);
-				client2client_die(client2client_listen_fd,"On client2client listening...\n");
+				int c2c_listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+				client2client_die(c2c_listen_fd,"On client2client listening...\n");
 
 				struct sockaddr_in client2client_addr;
 				memset(&client2client_addr, 0, sizeof(client2client_addr));
@@ -147,10 +150,10 @@ int client_receive_message(struct client *client){
 				inet_aton("127.0.0.1", &client2client_addr.sin_addr);
 
 				//listening
-				int ret_bind = bind(client2client_listen_fd, (struct sockaddr *)&client2client_addr, sizeof(client2client_addr));
+				int ret_bind = bind(c2c_listen_fd, (struct sockaddr *)&client2client_addr, sizeof(client2client_addr));
     			client2client_die(ret_bind,"On binding...\n");
     
-				int ret_listen = listen(client2client_listen_fd, 1);
+				int ret_listen = listen(c2c_listen_fd, 1);
 				client2client_die(ret_listen,"On listening...\n");
 
 				struct sockaddr_in client_addr = {0};
@@ -158,11 +161,33 @@ int client_receive_message(struct client *client){
 
 				socklen_t sizeofaddr = sizeof(client_addr);
 				printf("start accepting...\n");
-				int client_fd = accept(client2client_listen_fd, (struct sockaddr *)&client_addr,&sizeofaddr);
+				int client_fd = accept(c2c_listen_fd, (struct sockaddr *)&client_addr,&sizeofaddr);
 				
-				// 
 				client2client_die(client_fd, "On accepting...");
-				printf("Client 2 Client connection established");
+				printf("Client 2 : Client connection established");
+
+				int fd_file = open(fichier, O_CREAT | O_TRUNC | O_WRONLY, S_IRWXU);
+
+				struct message message;
+				memset(&message, 0, sizeof(message));
+				char payload[PROTO_MAX_PAYLOAD] = {0};
+				int n;
+				while(protocol_recv_message(c2c_listen_fd, &message,(void*)&payload) == 0){
+					if(protocol_validate_message(&message) != 0){
+						message.type = FILE_ERROR;
+						message.pld_len = 0;
+					}else{
+						protocol_send_all(fd_file, payload, message.pld_len);
+					}
+					message.type = FILE_ACK;
+					message.pld_len = 0;
+					protocol_send_message(c2c_listen_fd, &message, NULL);
+
+				}
+				message.pld_len = 0;
+				message.type = FILE_ACK;
+				protocol_send_message(c2c_listen_fd, &message, NULL);
+
 
 
 			}else{
@@ -170,8 +195,8 @@ int client_receive_message(struct client *client){
 				client_send_message(client, &message_send, NULL);
 			}
 			
-			char* ret = strcpy(message_send.infos, message.infos);
-			client_die_ptr(ret, client, "Error while copying (strcpy)");
+			char* ptr = strcpy(message_send.infos, message.infos);
+			client_die_ptr(ptr, client, "Error while copying (strcpy)");
 
 			client_send_message(client, &message_send, NULL);
 			break;
@@ -203,10 +228,19 @@ int client_receive_message(struct client *client){
 			int n;
 
 			while((n = read(fd_file, payload, sizeof(payload))) > 0){
+
 				message.pld_len = n;
 				message.pld_len = FILE_SEND;
 				protocol_send_message(s_fd, &message, payload);
+
+				while(protocol_recv_message(s_fd, &message, NULL), message.type == FILE_ERROR){
+
+					message.pld_len = n;
+					message.pld_len = FILE_SEND;
+					protocol_send_message(s_fd, &message, payload);
+				}
 			}
+			printf("Le fichier a bien été envoyé.\n")
 		}
 		case FILE_REJECT:{
 			printf("The user has refused the transfer.\n");

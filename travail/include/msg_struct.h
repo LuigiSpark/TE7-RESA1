@@ -21,7 +21,8 @@ enum msg_type {
 	FILE_ACCEPT,
 	FILE_REJECT,
 	FILE_SEND,
-	FILE_ACK
+	FILE_ACK,
+	FILE_ERROR
 };
 
 struct message {

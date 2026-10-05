@@ -215,7 +215,7 @@ int client_receive_message(struct client *client){
 			message.type = FILE_SEND;
 
 			strncpy(message.infos, client->file_name, INFOS_LEN - 1);
-			
+
 			char payload[PROTO_MAX_PAYLOAD];
 			int n;
 
@@ -231,7 +231,7 @@ int client_receive_message(struct client *client){
 
 				if(msg_resp.type == FILE_ERROR){
 					message.pld_len = n;
-					protocol_send_message(s_fd, &message, buf);
+					protocol_send_message(s_fd, &message, payload_resp);
 				}
 			}
 			close(fd_file);

@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+
 const char *msg_type_str[] = {
 	"NICKNAME_NEW",
 	"NICKNAME_LIST",
@@ -39,7 +40,7 @@ int protocol_send_all(int socket_fd, const void *buffer, size_t length){
     size_t sent = 0;
     do{
         ret = write(socket_fd, (char*)buffer + sent, length - sent);
-        die(ret, "Error while wrinting");
+        die(ret, "Error while writing");
 		sent += ret;
     }while(sent != length);
     return ret + 1;
@@ -80,7 +81,8 @@ int protocol_recv_message(int socket_fd, struct message *message, void **payload
         *payload = NULL;
         return EXIT_SUCCESS;
     }
-
+    protocol_validate_message(message); //Validation du message avant de faire l'allocation
+    
     *payload = malloc((size_t)message->pld_len);
     if(*payload == NULL) return 1;
 
@@ -89,6 +91,34 @@ int protocol_recv_message(int socket_fd, struct message *message, void **payload
         free(*payload);
         *payload = NULL;
         return 1;
+    }
+    return EXIT_SUCCESS;
+}
+
+int protocol_validate_message(const struct message *message){  
+    if (message->type < NICKNAME_NEW || message->type > FILE_ACK){
+        fprintf(stderr, "[Protocole Error]: Message type unknown\n");
+        return EXIT_FAILURE;
+    }
+
+    if (message->pld_len > PROTO_MAX_PAYLOAD){
+        fprintf(stderr, "[Protocole Error]: Payload length %d exceeds limit\n", message->pld_len);
+        return EXIT_FAILURE;
+    }
+
+    int infos_has_null= 1;
+    int nick_has_null= 1;
+    for (int i=0; i<128; i++){
+        if (message->infos[i]== '\0'){
+            infos_has_null=0;
+        }
+        if (message->nick_sender[i]== '\0'){
+            nick_has_null= 0;
+        }
+    }
+    if (infos_has_null + nick_has_null > 0 ){
+        fprintf(stderr, "[Protocol Error]: String fields must be null-terminated within 128 bytes\n");
+        return EXIT_FAILURE;
     }
     return EXIT_SUCCESS;
 }

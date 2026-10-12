@@ -1,6 +1,8 @@
 #ifndef MSG_STRUCT_H
 #define MSG_STRUCT_H
 #define CLIENT_H
+
+//protocole.md
 #define NICK_LEN 128
 #define INFOS_LEN 128
 #define PROTO_MAX_PAYLOAD 65536

@@ -395,12 +395,8 @@ int client_run(struct client *client){
 				}
 			//Command send
 			}else if(strncmp(payload, "/send ", 6) == 0){
-				char* pseudo = payload + 6; 
-				char* sep = strchr(pseudo, ' '); // On cherche le 2eme espace, celui qui separt le msg du pseudo
-				*sep = '\0';
-				char* file_name = sep + 1;  // Le nom du fichier commence juste après.
-
-				if(file_name == NULL){
+				char* pseudo;char* file_name;
+				if(cut_in_half(payload + 6, ' ', &pseudo, &file_name) != EXIT_SUCCESS){
 					fprintf(stderr,"[Server] : /send <pseudo> <file name>\n");
 					continue;
 				}else{

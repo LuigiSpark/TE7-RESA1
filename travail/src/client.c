@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -172,6 +173,9 @@ int client_receive_message(struct client *client){
 						protocol_send_message(client_fd, &message, NULL);
 					}else{
 						protocol_send_all(fd_file, file_payload, message.pld_len);
+						message.type = FILE_ACK;
+						message.pld_len = 0;
+						protocol_send_message(client_fd, &message, NULL);
 					}
 					free(file_payload);
 					file_payload = NULL;
@@ -231,7 +235,7 @@ int client_receive_message(struct client *client){
 
 				if(msg_resp.type == FILE_ERROR){
 					message.pld_len = n;
-					protocol_send_message(s_fd, &message, payload_resp);
+					protocol_send_message(s_fd, &message, payload);
 				}
 			}
 			close(fd_file);
@@ -245,7 +249,7 @@ int client_receive_message(struct client *client){
 			protocol_recv_message(s_fd, &msg_ack, &ack_payload);
 			if(ack_payload != NULL){ free(ack_payload); }
 
-			printf("%s has received the file.\n", client->file_name);
+			printf("%s has received the file.\n", message.infos);
 			close(s_fd);
 			break;
 		}

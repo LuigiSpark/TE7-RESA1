@@ -160,7 +160,10 @@ int client_receive_message(struct client *client){
 				printf("Client connection established\n");
 				close(c2c_listen_fd);
 
-				int fd_file = open((char*)payload, O_CREAT | O_TRUNC | O_WRONLY, S_IRWXU);
+				char path[256];
+				snprintf(path, sizeof(path), ".resa1/inbox/%s", (char*)payload);
+
+				int fd_file = open(path, O_CREAT | O_TRUNC | O_WRONLY, S_IRWXU);
 				client2client_die(fd_file, "On open file...");
 
 				struct message message;
@@ -212,11 +215,7 @@ int client_receive_message(struct client *client){
 			client_die(ret, client, "Error while connecting");
 
 			int fd_file = open(client->file_name, O_RDONLY);
-
-			if (fd_file<0){
-				fprintf(stderr, "File not found\n");
-				break;
-			}
+			client_die(fd_file, client, "Error while opening file");
 
 			struct message message;
 			memset(&message, 0, sizeof(message));

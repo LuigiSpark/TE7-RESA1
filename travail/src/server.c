@@ -263,8 +263,8 @@ int server_handle_message(struct server *server, struct user *sender, const stru
 
 				}else{
 					m_resp.type = FILE_REQUEST; 
-					m_resp.pld_len = snprintf(payload_resp, sizeof(payload_resp),"%s", sender->nickname);
-					protocol_send_message(target->fd, &m_resp, payload_resp);
+					m_resp.pld_len = strlen((char*)payload) + 1;
+					protocol_send_message(target->fd, &m_resp, payload);
 				}
 			}
 			break;

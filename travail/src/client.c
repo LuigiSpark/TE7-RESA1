@@ -210,7 +210,7 @@ int client_receive_message(struct client *client){
 			int fd_file = open(client->file_name, O_RDONLY);
 
 			if (fd_file<0){
-				fprintf(stderr, "File not found");
+				fprintf(stderr, "File not found\n");
 				break;
 			}
 

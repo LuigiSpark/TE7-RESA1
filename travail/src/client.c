@@ -208,7 +208,11 @@ int client_receive_message(struct client *client){
 			client_die(ret, client, "Error while connecting");
 
 			int fd_file = open(client->file_name, O_RDONLY);
-			client_die(fd_file, client, "Error while opening file");
+
+			if (fd_file<0){
+				fprintf(stderr, "File not found");
+				break;
+			}
 
 			struct message message;
 			memset(&message, 0, sizeof(message));
